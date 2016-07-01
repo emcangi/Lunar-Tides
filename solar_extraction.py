@@ -278,83 +278,50 @@ def bin_by_solar(data, filename):
 
     # ITERATE OVER SOLAR LOCAL TIMES & LONGITUDES ----------------------------
     for val in unique_slt:
-        for lon in range(-180, 190, 15):
+        for lon in range(-180, 180, 15):
             sltSlice = data[np.where(data[:,0] == val)]
             sltSlice = sltSlice[np.where(sltSlice[:,2]==lon)]
             if sltSlice.size != 0:
                 means.append([val, lon, np.mean(sltSlice[:,6])])
                 
     means = np.asarray(means)
-        
-    line0 = 'Solar Local Time\tLongitude\tMean Solar Tide'
-    np.savetxt('{}_slt_bin.txt'.format(filename), means, fmt='%.4f', delimiter='\t', 
-               header=line0)
 
     return means
     
 
-def remove_solar(c, binfile): 
+def remove_solar(original, means): 
     '''
     Subtract off the solar tidal averages. Iterates through the file holding 
     solar tidal average data per solar local time and longitude.
     --INPUT--
-        c           Data table where columns are solar local time, lunar local time, 
-                    longitude, lunar Julian date, hour, moon phase and total tidal 
-                    value.
-        binfile     Name of a file from which to read binned solar data
+        original    Data array where columns are solar local time, lunar local
+                    time, longitude, lunar Julian date, hour, moon phase and 
+                    total tidal value.
+        means       Data array containing SLT, longitude and mean tidal value.
     --OUTPUT--
         result      Array holding original data for columns 0-5 and the 
                     "reconstructed" lunar tidal values in column 6
     '''
     
     # create new array to store subtracted values
-    r = np.zeros([c.shape[0]])
+    #r = np.zeros([original.shape[0]])
+    
+    # create copy arrays
+    solar_to_subtract = np.array(original)
+    difference = np.array(original)
 
-    # For each file line, find row in c array where solar local time and 
-    # longitude for each match. Then subtract the solar tidal data, given in 
-    # the file, from combined tidal data in c and store in r
-    with open(binfile, 'r') as sbin:
-        head = next(sbin)              # takes care of header line
-        for line in sbin:
-            l = line.split()
-            slt = float(l[0])
-            lon = float(l[1])
-            # find rows in c that match this line's values
-            i = np.where((c[:,0]==slt) & (c[:,2]==lon))[0]
-            r[i] = c[i,6] - float(l[2])
+    # For each SLT and longitude pair, find row in original data where solar 
+    # local time and longitude match. Then subtract the solar tidal data
+    for row in means:
+        slt = row[0]
+        long = row[1]
+        avg = row[2]
+        # find rows in original data that match
+        i = np.where((original[:,0]==slt) & (original[:,2]==long))[0]
+        solar_to_subtract[i,6] = avg
+        difference[i,6] = original[i,6] - avg
             
-    # Create copy of original data array, replace tidal data with r
-    copy = np.array(c)
-    np.delete(copy, 6, 1)
-    result = np.column_stack((copy, r))
-            
-    return result
-
-
-def compare_with_plot(recon, original):
-    '''
-    Compare reconstructed data with original data over a small window to get 
-    a sense of how well it matches.
-    ---INPUT---
-        recon: lunar tidal data versus some variable (doesn't matter)
-        original: data that was fed into the synthetic model
-    ---OUTPUT---
-        a plot of the two overlaid
-    '''
-
-    x = np.arange(0, recon.shape[0])
-    i = 477
-    s = 350
-
-    plt.figure(figsize=(18,6))
-    plt.title('reconstructed lunar tides vs original data')
-    plt.plot(x[i:i+s], recon[i:i+s], label='reconstructed lunar tides')
-    plt.plot(x[i:i+s], original[i:i+s], label='original lunar tide data')
-    plt.xlabel('whatever')
-    plt.ylabel('Value')
-    plt.legend(loc='upper right')
-    plt.rcParams.update({'font.size': 14})
-    plt.show()
+    return solar_to_subtract, difference
 
 
 def chisq(obs, exp):
