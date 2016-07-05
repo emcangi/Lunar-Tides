@@ -229,9 +229,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
                     for n in nRange:
                         for s in sRange:
                             if component=='solar':     # solar contribution
-                                # DO NOT CHANGE-----------------------------------
                                 tide += A_S * cos((2*pi*n/24)*fracHr + s*l - p)
-                                #-------------------------------------------------
                             elif component=='lunar':   # lunar contribution
                                 tide += A_L * cos((2*pi*n/24)*(fracHr-nuHrs) + s*l - p)
 
@@ -381,7 +379,7 @@ def plot_vs_long(data, date, time, flag, title, c):
         plt.close()
     
       
-def plot_vs_date(data, long, title, data2=None, c=None, m=None, lb=None, mode='show'):
+def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None, mode='show'):
     """
     Plots tidal values over time at a particular longitude.
     ---INPUT---
@@ -415,13 +413,13 @@ def plot_vs_date(data, long, title, data2=None, c=None, m=None, lb=None, mode='s
     s = len(times)                           # set a limit for plotting
     
     if stack:
-        plt.plot(times[:s], tides[:s], color=c[0], marker=m, label=lb[0])
-        plt.plot(times[:s], tides2[:s], color=c[1], marker=m, label=lb[1])
+        ax.plot(times[:s], tides[:s], color=c[0], marker=m, label=lb[0])
+        ax.plot(times[:s], tides2[:s], color=c[1], marker=m, label=lb[1])
         plt.legend(loc='lower right')
     else:
-        plt.plot(times, tides, marker=m)
+        ax.plot(times, tides, marker=m)
 
-    plt.title('{} by Julian date at {}° Longitude'.format(title, long))
+    #plt.title('{} by Julian date at {}° Longitude'.format(title, long))
     #plt.xlim([min(times), max(times)])
     plt.xlabel('Julian date')
     plt.ylabel('Tide amplitude')  # what actually is the units of this?
@@ -429,7 +427,7 @@ def plot_vs_date(data, long, title, data2=None, c=None, m=None, lb=None, mode='s
     
     if mode=='show':
         plt.show()
-        plt.close()
+        #plt.close()
     elif mode=='save':
         fn = '{} by Julian date at {}° Longitude'.format(title, long)
         plt.savefig(fn, bbox_inches='tight')
@@ -440,6 +438,87 @@ def plot_vs_date(data, long, title, data2=None, c=None, m=None, lb=None, mode='s
         plt.show()
         plt.clf()
         plt.close()
+
+def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None, lb=None, mode='show'):
+    """
+        Plots tidal values over time at a particular longitude for multiple time steps
+        ---INPUT---
+            data        list of arrays of tidal data, length 3
+            long        Longitude to examine
+            dts         For titles
+            title       descriptive plot title
+            data2       Optional second data to plot if stacking two tides
+            c           color list, has two elements if stacking.
+            m           marker shape to use
+            lb          Plot legend elements
+            mode        Whether to save or show the figure. Default 'show'
+        ---OUTPUT---
+            A plot
+        """
+
+    if data2 != None:
+        stack = True
+    else:
+        stack = False
+
+    # START PLOT -----------------------------------------------------------------
+    fig = plt.figure(figsize=(25,14))
+
+    # Create main subplot for common labels and turn off its ticks
+    mainax = fig.add_subplot(111)
+    mainax.set_frame_on(False)
+    mainax.axes.get_xaxis().set_ticks([])
+    mainax.axes.get_yaxis().set_ticks([])
+
+    # Axes on which we will plot
+    ax1 = fig.add_subplot(311)
+    ax2 = fig.add_subplot(312)
+    ax3 = fig.add_subplot(313)
+    ax = (ax1, ax2, ax3)
+
+    # Set common labels
+    mainax.set_xlabel('Julian Date', labelpad=25)
+    mainax.set_ylabel('Tide amplitude', labelpad=25)
+    mainax.set_title('{} by Julian date at {}° Longitude'.format(title, long), y=1.08)
+
+    # FIND ROWS IN ARRAY WITH MATCHING LONGITUDE -----------------------------
+    for j in [0,1,2]:
+        rows = np.where(data[j][:, 2] == long)[0]
+        times = [data[j][i, 3] for i in rows]
+        tides = [data[j][i, 6] for i in rows]
+
+        if stack:
+            tides2 = [data2[j][i, 6] for i in rows]
+
+        # PLOT -------------------------------------------------------------------
+        s = len(times)  # set a limit for plotting
+
+        if stack:
+            ax[j].plot(times[:s], tides[:s], color=c[0], marker=m, label=lb[0])
+            ax[j].plot(times[:s], tides2[:s], color=c[1], marker=m, label=lb[1])
+            ax[j].legend(loc='lower right')
+        else:
+            ax[j].plot(times, tides, marker=m)
+
+        ax[j].set_title('dt = {} minutes'.format(float(dts[j])*60  ))
+
+    fig.tight_layout()
+    plt.rcParams.update({'font.size': 16})
+    
+    if mode == 'show':
+        plt.show()
+        plt.close()
+    elif mode == 'save':
+        fn = '{} by Julian date at {}° Longitude'.format(title, long)
+        plt.savefig(fn, bbox_inches='tight')
+        plt.close()
+    elif mode == 'both':
+        fn = '{} by Julian date at {}° Longitude'.format(title, long)
+        plt.savefig(fn, bbox_inches='tight')
+        plt.show()
+        plt.clf()
+        plt.close()
+
 
 
 def plot_vs_slt(data, time):
