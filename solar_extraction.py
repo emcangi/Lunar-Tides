@@ -3,11 +3,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def jd_to_date(jd):    
-    '''
+
+def jd_to_date(jd):
+    """
     Converts Julian date to Gregorian date.
     From Astronomical Algorithms, Jean Meeus, 1991.
-    '''
+    """
     import math
 
     j = jd + 0.5
@@ -38,18 +39,18 @@ def jd_to_date(jd):
 
 
 def date_to_jd(date, time):
-    '''
+    """
     Converts Gregorian date to Julian date given the format:
     date = YYYY-MM-DD, time = HH:MM:SS
     From Astronomical Algorithms, Jean Meeus, 1991.
-    '''
+    """
     x = time.split(':')
     x = [int(xi) for xi in x]
     s = x[2]
     mi = x[1]
     h = x[0]
     f = h/24 + mi/(60*24) + s/3600
-    
+
     sign = 1
     if date[0] == '-':
         date = date[1:]
@@ -59,38 +60,38 @@ def date_to_jd(date, time):
     d = x[2]
     mo = x[1]
     y = sign * x[0]
-    
+
     earlyOct1582 = (y==1582 and mo<=10 and d < 15)
     early1582 = (y==1582 and mo<= 9)
     anytimeBefore = (y < 1582)
-    
+
     if earlyOct1582 or early1582 or anytimeBefore:
         flag = 'J'
-    else: 
+    else:
         flag = 'G'
 
     if mo == 1 or mo == 2:
         y = y - 1
         mo = mo + 12
-    
+
     A = int(y / 100)
     B = 2 - A + int(A / 4) if flag=='G' else 0
 
     jd = int(365.25 * (y + 4716)) + int(30.6001 * (mo + 1)) + d + B - 1524.5 + f
-    
+
     return jd
 
 
 def get_moon_phase(now):
-    '''
+    """
     Calculate moon phase for a given Julian date.(cf. Chapman & Linzen)
     ---INPUT---
         now: a Julian date, including hours, minutes, seconds.
     ---OUTPUT---
         nuHrs: Phase of the moon in hours
-    '''
+    """
     from math import pi
-    
+
     ref = date_to_jd('1899-12-31', '12:00:00')
     T = (now - ref) / 36525
     nu = -9.26009 + 445267.12165*T + 0.00168*(T**2)
@@ -100,106 +101,105 @@ def get_moon_phase(now):
     return nuHrs
 
 
-def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15, 
+def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
                    nRange=range(1,3), sRange=range(-6,7), filename='tides.txt',
                    component='solar'):
     """
     Generates tidal data using the equation:
     A + ΣΣS_{ns}*cos[Ωnt + sλ - Φ_{ns}] + ΣΣL_{ns}*cos[Ωnt + sλ - Φ_{ns}]
-    for specified amplitudes and phases. 
+    for specified amplitudes and phases.
     This function is altitude and latitude independent (***???)
-    where 
-        A = amplitude
-        n = 2nd harmonic (semidiurnal variation)
-        s = zonal wavenumber (maxes and mins along a line of longitude)
-            s = 2 => migrating tide
-            s = 3 => non-migrating tide
-        t = universal time at Greenwich Meridian
-        λ = longitude
-        Φ = phase
+    where
+        S or L          amplitude
+        n               harmonic (1/period in units of days)
+        s               zonal wavenumber (maxes & mins along line of longitude)
+        t               universal time at Greenwich Meridian
+        λ               longitude
+        Φ               phase
     --INPUT--
         startDate       a start date, format '2016-06-21'
         endDate         an end date, format '2016-06-30'
-        amps            List of amplitude values (length = 3).
-        phase           info about whether to vary phase or keep it cosntant
+        amps            list of amplitude values (length = 3).
+        phase           whether phase varies (value = 'V') or is constant ('C')
+        dt              timestep for data generation in hours. 25 = 15 min
         nRange          values of n to use in calculation
         sRange          values of s to use in calculation
         filename        filename to write values to
-        component       solar, lunar, s+l (solar+lunar) or all; specifies 
+        component       solar, lunar, s+l (solar+lunar) or all; specifies
                         summation bounds for n and s
     --OUTUT--
         Tidal data in array of format:
-        Solar local time - Lunar local time - Longitude - Solar Julian date - 
+        Solar local time - Lunar local time - Longitude - Solar Julian date -
         Lunar Julian date - Hour of day - Moon phase in hours - Tidal value
-        
+
     Adapted from script by Dr. Ruth Lieberman by Eryn Cangi for LASP REU 2016.
     """
     from math import pi, cos
-    
-    # VARIABLES --------------------------------------------------------------
+
+    # VARIABLES ----------------------------------------------------------------
+    hoursPerDay = 24
+    W = 2 * pi / 24                # Earth rotation rate (omega)
     A = amps[0]                    # Background amplitude
     S = amps[1]                    # Solar amplitude
     L = amps[2]                    # Lunar amplitude
-    if phase=='C':                 # Phases (Φ_{n,s})
+    if phase == 'C':                 # Phases (Φ_{n,s})
         phi = 0
     else:
         phi = lambda t: cos(t + pi/2)
-    hoursPerDay = 24 
-     
-    # DEFINE LONGITUDE GRID --------------------------------------------------
+
+    # DEFINE LONGITUDE GRID ----------------------------------------------------
     numLongs = 360 // longIncr
     longs = np.asarray([l*pi/180 for l in list(range(-180, 180, longIncr))])
-    W = 2*pi/24                   # Earth rotation rate (omega)
-    
-    # GET JULIAN DATES -------------------------------------------------------
+
+    # GET JULIAN DATES ---------------------------------------------------------
     ti = date_to_jd(startDate, '00:00:00')
     tf = date_to_jd(endDate, '00:00:00')
-    numDays = int(tf - ti) + 1 # +1 to include the last day in the loops
-    
-    # MAKE OUTPUT ARRAY ------------------------------------------------------
+    numDays = int(tf - ti) + 1         # +1 to include the last day in the loops
+
+    # MAKE OUTPUT ARRAY --------------------------------------------------------
     rows = numLongs * 24/dt * numDays
     output = np.empty([rows,7])
     r = 0
-    
+
     # LOOP THROUGH TIMESPAN (DAYS) ===========================================
     for day in range(numDays):    # + makes inclusive: calculates for last day
         curJulDate = ti + day
-        
-        # GET REGULAR DATE FOR CALCULATIONS ----------------------------------
-        yr, mo, d, h, minute, sec = jd_to_date(curJulDate) 
+
+        # GET REGULAR DATE FOR CALCULATIONS ------------------------------------
+        yr, mo, d, h, minute, sec = jd_to_date(curJulDate)
         curRegDate = '{}-{:>02}-{:>02}'.format(yr, mo, d)
-        curRegHour = h
-        
-        # LOOP THROUGH HOURS IN DAY ==========================================
+        # curRegHour = h
+
+        # LOOP THROUGH HOURS IN DAY ============================================
         for hr in np.arange(hoursPerDay):
             for f in np.arange(0,1,dt):
 
-                # UPDATE HOUR, GET NEW JULIAN DATE -------------------------------
-                curRegHour = 0 + hr
-                curRegMin = int(f * 60)
-                fracHr = curRegHour + f
-                curRegTime = '{:>02}:{:>02}:{:>02}'.format(curRegHour, curRegMin, sec)
+                # UPDATE HOUR, GET NEW JULIAN DATE -----------------------------
+                #curRegHour = 0+hr
+                curMin = int(f * 60)
+                fHr = hr + f
+                curRegTime = '{:>02}:{:>02}:{:>02}'.format(hr, curMin, sec)
                 newJD = date_to_jd(curRegDate, curRegTime)
 
-                # GET MOON PHASE AT THIS HOUR ------------------------------------
-                nuHrs = get_moon_phase(newJD)
+                # GET MOON PHASE AT THIS HOUR ----------------------------------
+                nuHr = get_moon_phase(newJD)
 
-                # LOOP OVER LONGITUDES ===========================================
+                # LOOP OVER LONGITUDES =========================================
                 for l in longs:
-                    # CALCULATE SOLAR LOCAL TIME ---------------------------------
-                    slt = fracHr + l/W
-                    if slt < 0:            # Wrap around behavior, Earth = sphere
+                    # CALCULATE SOLAR LOCAL TIME -------------------------------
+                    slt = fHr + l/W
+                    if slt < 0:           # Wrap around behavior, Earth = sphere
                         slt += 24
                     elif slt > 24:
                         slt -= 24
                     else:
                         pass
 
-                    # CALCULATE LUNAR LOCAL TIME ---------------------------------
-                    llt = slt - nuHrs
+                    # CALCULATE LUNAR LOCAL TIME -------------------------------
+                    llt = slt - nuHr
                     llt = llt + 24 if llt < 0 else llt
 
-                    # CALCULATE THE TIDES ----------------------------------------
+                    # CALCULATE THE TIDES --------------------------------------
 
                     # Assign amplitudes
                     # Background
@@ -220,7 +220,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
                     else:
                         A_L = L(hr,l)
 
-                    # Assign phase 
+                    # Assign phase
                     if type(phi)==int:
                         p = phi
                     else:
@@ -228,30 +228,32 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
 
                     for n in nRange:
                         for s in sRange:
-                            if component=='solar':     # solar contribution
-                                tide += A_S * cos((2*pi*n/24)*fracHr + s*l - p)
-                            elif component=='lunar':   # lunar contribution
-                                tide += A_L * cos((2*pi*n/24)*(fracHr-nuHrs) + s*l - p)
-
-                            elif component=='s+l':
-                                tide += A_S*cos((2*pi*n/24)*fracHr + s*l - p) \
-                                      + A_L*cos((2*pi*n/24)*(fracHr-nuHrs) + s*l - p)
+                            if component == 'solar':     # solar contribution
+                                tide += A_S * cos((W*n)*fHr + s*l - p)
+                            elif component == 'lunar':   # lunar contribution
+                                tide += A_L * cos((W*n)*(fHr-nuHr) + s*l - p)
+                            elif component == 's+l':
+                                tide += A_S * cos((W*n)*fHr + s*l - p) \
+                                      + A_L * cos((W*n)*(fHr-nuHr) + s*l - p)
                     output[r, 0] = slt
                     output[r, 1] = llt
                     output[r, 2] = round(l * 180/pi)
                     output[r, 3] = newJD
-                    output[r, 4] = fracHr
-                    output[r, 5] = nuHrs
+                    output[r, 4] = fHr
+                    output[r, 5] = nuHr
                     output[r, 6] = tide
                     r += 1
 
-    # FORMAT HEADER LINE, WRITE FILE -----------------------------------------
-    # cells = '{:^20}'*7
-    # line0 = cells.format('Solar local time', 'Lunar local time', 'Longitude',
-    #                      'Julian Date', 'UT', 'Moon phase (hrs)', 'Tide')
-    # np.savetxt(filename, output, fmt='%.4f', delimiter='\t', header=line0)
-    
-    return output
+    #FORMAT HEADER LINE, WRITE FILE --------------------------------------------
+    cells = '{:<20}\t'*7
+    line0 = cells.format('Solar local time', 'Lunar local time', 'Longitude',
+                         'Julian Date', 'UT', 'Moon phase (hrs)', 'Tide')
+    np.savetxt(filename, output, fmt='%-20.4f', delimiter='\t', header=line0,
+               comments='')
+
+    M2ONLY120 = output[np.where(output[:,2]==-120)]
+
+    return output, M2ONLY120
 
 
 def bin_by_solar(data):
@@ -268,8 +270,9 @@ def bin_by_solar(data):
     """
 
     means = []
+    values_used = []
 
-    # FIND UNIQUE SOLAR LOCAL TIMES ------------------------------------------
+    # FIND UNIQUE SOLAR LOCAL TIMES --------------------------------------------
     slt = np.ndarray.tolist(data[:, 0])
     unique_slt = set([round(x,4) for x in slt])
 
@@ -279,35 +282,37 @@ def bin_by_solar(data):
             sltSlice = data[np.where(data[:,0] == val)]
             sltSlice = sltSlice[np.where(sltSlice[:,2]==lon)]
             if sltSlice.size != 0:
-                means.append([val, lon, np.mean(sltSlice[:,6])])
-                
+                vals_to_avg = sltSlice[:,6]
+                values_used.append([val, lon, len(vals_to_avg)])
+                means.append([val, lon, np.mean(vals_to_avg)])
+
     means = np.asarray(means)
 
-    return means
-    
+    return means, values_used
 
-def remove_solar(original, means): 
+
+def remove_solar(original, means):
     """
-    Subtract off the solar tidal averages. Iterates through the file holding 
+    Subtract off the solar tidal averages. Iterates through the file holding
     solar tidal average data per solar local time and longitude.
     --INPUT--
         original    Data array where columns are solar local time, lunar local
-                    time, longitude, lunar Julian date, hour, moon phase and 
+                    time, longitude, lunar Julian date, hour, moon phase and
                     total tidal value.
         means       Data array containing SLT, longitude and mean tidal value.
     --OUTPUT--
-        result      Array holding original data for columns 0-5 and the 
+        result      Array holding original data for columns 0-5 and the
                     "reconstructed" lunar tidal values in column 6
     """
-    
+
     # create new array to store subtracted values
     # r = np.zeros([original.shape[0]])
-    
+
     # create copy arrays
     solar_to_subtract = np.array(original)
     difference = np.array(original)
 
-    # For each SLT and longitude pair, find row in original data where solar 
+    # For each SLT and longitude pair, find row in original data where solar
     # local time and longitude match. Then subtract the solar tidal data
     for row in means:
         slt = row[0]
@@ -317,15 +322,15 @@ def remove_solar(original, means):
         i = np.where((original[:,0]==slt) & (original[:,2]==long))[0]
         solar_to_subtract[i,6] = avg
         difference[i,6] = original[i,6] - avg
-            
+
     return solar_to_subtract, difference
 
 
 def chisq(obs, exp):
-    '''
-    Perform χ² minimization test for the observed and expected lunar tidal 
+    """
+    Perform χ² minimization test for the observed and expected lunar tidal
     data.
-    '''
+    """
     tot = 0
 
     for o,e in zip(obs, exp):
@@ -336,7 +341,7 @@ def chisq(obs, exp):
 
 
 def plot_vs_long(data, date, time, flag, title, c):
-    '''
+    """
     Plots tidal value versus longitude for a specified Julian date
     ---INPUT---
         data        Array of tidal data
@@ -347,20 +352,20 @@ def plot_vs_long(data, date, time, flag, title, c):
         c           plot line color. Just for aesthetics.
     ---OUTPUT---
         A plot
-    '''
-    
-    
+    """
+
+
     JDdate = date_to_jd(date, time)
 
     # FIND ROWS IN DATA ARRAY WITH MATCHING DATE -----------------------------
-    # Because data for a particular Julian date is all grouped together, the 
+    # Because data for a particular Julian date is all grouped together, the
     # values in rows[0] (the indices) will be consecutive.
     rows = np.where(data[:,3]==JDdate)[0]
     i = rows[0]
     f = rows[-1]
     longs = data[i:f,2]
     tides = data[i:f,6]
-    
+
     # PLOT -------------------------------------------------------------------
     plt.figure(figsize=(10,8))
     plt.plot(longs, tides, color=c, marker=r'$\bigodot$', markersize=12)
@@ -368,7 +373,7 @@ def plot_vs_long(data, date, time, flag, title, c):
     plt.xlabel('Longitude')
     plt.ylabel('Tide amplitude') # what actually is the units of this?
     plt.rcParams.update({'font.size': 16})
-    
+
     if flag=='show':
         plt.show()
         plt.close()
@@ -377,9 +382,10 @@ def plot_vs_long(data, date, time, flag, title, c):
         plt.savefig(fn.format(date, time.split(':')[0]), bbox_inches='tight')
         plt.clf()
         plt.close()
-    
-      
-def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None, mode='show'):
+
+
+def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
+                 mode='show'):
     """
     Plots tidal values over time at a particular longitude.
     ---INPUT---
@@ -394,12 +400,12 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None, mo
     ---OUTPUT---
         A plot
     """
-    
+
     if data2 != None:
         stack = True
-    else: 
+    else:
         stack = False
-        
+
     # FIND ROWS IN ARRAY WITH MATCHING LONGITUDE -----------------------------
     rows = np.where(data[:, 2]==long)[0]
     times = [data[i, 3] for i in rows]
@@ -411,7 +417,7 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None, mo
     # PLOT -------------------------------------------------------------------
     plt.figure(figsize=(25, 6))
     s = len(times)                           # set a limit for plotting
-    
+
     if stack:
         ax.plot(times[:s], tides[:s], color=c[0], marker=m, label=lb[0])
         ax.plot(times[:s], tides2[:s], color=c[1], marker=m, label=lb[1])
@@ -424,7 +430,7 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None, mo
     plt.xlabel('Julian date')
     plt.ylabel('Tide amplitude')  # what actually is the units of this?
     plt.rcParams.update({'font.size': 16})
-    
+
     if mode=='show':
         plt.show()
         #plt.close()
@@ -439,7 +445,8 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None, mo
         plt.clf()
         plt.close()
 
-def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None, lb=None, mode='show'):
+def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
+                       lb=None, mode='show'):
     """
         Plots tidal values over time at a particular longitude for multiple time steps
         ---INPUT---
@@ -504,7 +511,7 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None, 
 
     fig.tight_layout()
     plt.rcParams.update({'font.size': 16})
-    
+
     if mode == 'show':
         plt.show()
         plt.close()
@@ -520,17 +527,16 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None, 
         plt.close()
 
 
-
 def plot_vs_slt(data, time):
-    '''
+    """
     Plots tidal value versus solar local time
     ---INPUT---
         data        Array of tidal data
         time        time in format HH:MM:SS
     ---OUTPUT---
         A plot
-    '''
-    
+    """
+
     # FORMAT SLT -------------------------------------------------------------
     time_els = time.split(':')
     time_els = [float(s) for s in time_els]
@@ -540,11 +546,11 @@ def plot_vs_slt(data, time):
     if time % time_els[0] not in [0, 0.3333, 0.6667]:
         raise Exception('Bad time given')
 
-    # FIND MATCHING SOLAR LOCAL TIMES IN DATA --------------------------------           
+    # FIND MATCHING SOLAR LOCAL TIMES IN DATA --------------------------------
     rows = np.where(data[:,0]==time)[0]
     longs = [data[i,2] for i in rows]
     tides = [data[i,6] for i in rows]
-    
+
     # PLOT--------------------------------------------------------------------
     plt.figure(figsize=(10,8))
     plt.scatter(longs,tides, marker='x')
@@ -553,10 +559,10 @@ def plot_vs_slt(data, time):
     plt.ylabel('Tide value') # what actually is the units of this?
     plt.rcParams.update({'font.size': 16})
     plt.show()
-    
-    
+
+
 def bin_by_lunar(data, filename):
-    '''
+    """
     Finds the mean of the solar contribution at a given solar local time.
     Writes a file of means for each pair of a unique solar local time and
     longitude.
@@ -566,7 +572,7 @@ def bin_by_lunar(data, filename):
     ---OUTPUT---
         means       3-column array, columns: solar local time, longitude,
                     mean solar contribution.
-    '''
+    """
 
     means = []
 
@@ -583,13 +589,13 @@ def bin_by_lunar(data, filename):
             lltSlice = lltSlice[np.where(lltSlice[:,2]==lon)]
             if lltSlice.size != 0:
                 means.append([val, lon, np.mean(lltSlice[:,6])])
-                
+
     print('Done iterating over LLT...')
-    
+
     means = np.asarray(means)
-        
+
     line0 = 'Lunar Local Time\tLongitude\tMean Lunar Tide'
-    np.savetxt('{}_llt_bin.txt'.format(filename), means, fmt='%.4f', delimiter='\t', 
+    np.savetxt('{}_llt_bin.txt'.format(filename), means, fmt='%.4f', delimiter='\t',
                header=line0)
 
     return means
