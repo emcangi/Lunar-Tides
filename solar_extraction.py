@@ -280,9 +280,14 @@ def bin_by_solar(data):
     for val in unique_slt:
         for lon in range(-180, 180, 15):
             sltSlice = data[np.where(data[:,0] == val)]
-            sltSlice = sltSlice[np.where(sltSlice[:,2]==lon)]
-            if sltSlice.size != 0:
-                vals_to_avg = sltSlice[:,6]
+            sltSlice2 = sltSlice[np.where(sltSlice[:,2]==lon)]
+            if val == 15.9 and lon==-120:
+                print('15.9 and -120 has the data: ')
+                print(sltSlice2)
+            if sltSlice2.size != 0:
+                # if lon==-120 and 15.4<=val<=16.2:
+                #     print(sltSlice2)
+                vals_to_avg = sltSlice2[:,6]
                 values_used.append([val, lon, len(vals_to_avg)])
                 means.append([val, lon, np.mean(vals_to_avg)])
 
@@ -445,6 +450,7 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
         plt.clf()
         plt.close()
 
+
 def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
                        lb=None, mode='show'):
     """
@@ -489,7 +495,7 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
     mainax.set_title('{} by Julian date at {}° Longitude'.format(title, long), y=1.08)
 
     # FIND ROWS IN ARRAY WITH MATCHING LONGITUDE -----------------------------
-    for j in [0,1,2]:
+    for j in range(len(dts)):#[0,1,2]:
         rows = np.where(data[j][:, 2] == long)[0]
         times = [data[j][i, 3] for i in rows]
         tides = [data[j][i, 6] for i in rows]

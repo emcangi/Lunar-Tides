@@ -9,7 +9,7 @@ from solar_extraction import *
 
 subs = []
 totals = []
-dts = [0.1, 0.25, 1]
+dts = [0.1]#, 0.25, 1]
 
 for dt in dts:
 
@@ -26,8 +26,9 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1L = generate_tides('2016-01-01', '2016-01-02', amps=[0,10,10], phase='C',
-                            dt=dt, nRange=[2], sRange=[2], filename='M2_scenario1.txt',
+    data1L, M2only120 = generate_tides('2016-01-01', '2016-01-02', amps=[0,10,10],
+                            phase='C', dt=dt, nRange=[2], sRange=[2],
+                            filename='M2_dt={}_orig_eq.txt'.format(dt),
                             component='lunar')
 
     #============================================================================#
@@ -40,7 +41,16 @@ for dt in dts:
     #                         component='s+l')
 
     # Bin by local time
-    means1L = bin_by_solar(data1L)
+
+    np.savetxt('M2_lon-120_dt={}_orig_eq.txt'.format(dt), M2only120,
+               fmt='%-20.4f',
+               delimiter='\t')
+
+    print(data1L[np.where((data1L[:,0],4==15.9000) & (data1L[:,2]==-120.0000))])
+    means1L, valsUsed = bin_by_solar(data1L)
+    np.savetxt('means1L_dt={}_orig_eq.txt'.format(dt), means1L, fmt='%-20.4f',
+               delimiter='\t')
+
 
     # Subtract the averages according to solar local time
     avgs, nosol1T = remove_solar(data1L, means1L)
@@ -48,10 +58,10 @@ for dt in dts:
     subs.append(avgs)
     totals.append(data1L)
 
-plot_vs_date_multi(subs, -120, title='Lunar semidiurnal tide and average over SLT,', dts=dts,
-                   data2=totals, c=['red', 'darkorchid'], lb=['Lunar avg by SLT', 'lunar semidiurnal original'], mode='both')
-
-
+plot_vs_date_multi(subs, -120, title='Lunar semidiurnal tide and average over '
+                    'SLT,', dts=dts, data2=totals, c=['red', 'darkorchid'],
+                   lb=['Lunar avg by SLT', 'lunar semidiurnal original'],
+                   mode='show')
 
 # Bin the results by lunar local time
 #result = bin_by_lunar(nosol1T, '1T')
