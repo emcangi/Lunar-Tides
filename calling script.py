@@ -9,7 +9,7 @@ from solar_extraction import *
 
 subs = []
 totals = []
-dts = [0.1]#, 0.25, 1]
+dts = [0.1, 0.25, 1]
 
 for dt in dts:
 
@@ -26,11 +26,11 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1L, M2only120 = generate_tides('2016-01-01', '2016-01-05', amps=[0,
-                                                                         10,10],
-                            phase='C', dt=dt, nRange=[2], sRange=[2],
-                            filename='M2_dt={}_UT_eq.txt'.format(dt),
-                            component='lunar')
+    data1L, M2only120 = generate_tides('2016-01-01', '2016-01-05',
+                                       amps=[0,10,10], phase='C', dt=dt,
+                                       nRange=[2], sRange=[2],
+                                       filename='M2_revised.txt'.format(dt),
+                                       component='lunar')
 
     #============================================================================#
     # Generate total data
@@ -44,11 +44,11 @@ for dt in dts:
     # Bin by local time
 
     # Save a file
-    np.savetxt('M2_lon-120_dt={}_UT_eq.txt'.format(dt), M2only120,
+    np.savetxt('M2_lon-120_dt={}_revised.txt'.format(dt), M2only120,
                fmt='%-20.4f', delimiter='\t')
 
     means1L = bin_by_solar(data1L)
-    np.savetxt('means1L_dt={}_UT_eq.txt'.format(dt), means1L, fmt='%-20.4f',
+    np.savetxt('means1L_dt={}_revised.txt'.format(dt), means1L, fmt='%-20.4f',
                delimiter='\t')
 
 

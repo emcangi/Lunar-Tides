@@ -121,7 +121,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
         endDate         an end date, format '2016-06-30'
         amps            list of amplitude values (length = 3).
         phase           whether phase varies (value = 'V') or is constant ('C')
-        dt              timestep for data generation in hours. 25 = 15 min
+        dt              timestep for data generation in hours. 0.25 = 15 min
         nRange          values of n to use in calculation
         sRange          values of s to use in calculation
         filename        filename to write values to
@@ -137,11 +137,10 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     from math import pi, cos
 
     # VARIABLES ----------------------------------------------------------------
-    hoursPerDay = 24
     W = 2 * pi / 24                # Earth rotation rate (omega)
     A = amps[0]                    # Background amplitude
     S = amps[1]                    # Solar amplitude
-    L = amps[2]                    # Lunar amplitude
+    M = amps[2]                    # Lunar amplitude
     if phase == 'C':                 # Phases (Φ_{n,s})
         phi = 0
     else:
@@ -151,98 +150,105 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     numLongs = 360 // longIncr
     longs = np.asarray([l*pi/180 for l in list(range(-180, 180, longIncr))])
 
-    # GET JULIAN DATES ---------------------------------------------------------
+    # SET UP TIME RELATED VARIABLES --------------------------------------------
     ti = date_to_jd(startDate, '00:00:00')
     tf = date_to_jd(endDate, '00:00:00')
-    numDays = int(tf - ti) + 1         # +1 to include the last day in the loops
+    n_days = int(tf - ti) + 1        # +1 to include the last day in the loops
+    n_timesteps = ((24 / dt) * n_days)
+    timesteps = np.arange(0, n_timesteps, dt)
+    dt_conv = 0.0416667 / 1           # 0.0416667 JD / 1 hour
 
     # MAKE OUTPUT ARRAY --------------------------------------------------------
-    rows = numLongs * 24/dt * numDays
+    rows = numLongs * n_timesteps
     output = np.empty([rows,7])
     r = 0
 
-    # LOOP THROUGH TIMESPAN (DAYS) ===========================================
-    for day in range(numDays):    # + makes inclusive: calculates for last day
-        curJulDate = ti + day
+    # LOOP THROUGH TIMESTEPS ===================================================
+    for t in timesteps:
+        ## XXX curJulDate = ti + day
+        t_jul = ti + t * dt_conv       # Add current hour number in Julian time
 
         # GET REGULAR DATE FOR CALCULATIONS ------------------------------------
-        yr, mo, d, h, minute, sec = jd_to_date(curJulDate)
-        curRegDate = '{}-{:>02}-{:>02}'.format(yr, mo, d)
+        yr, mo, d, h, minute, sec = jd_to_date(t_jul)
+        date_greg = '{}-{:>02}-{:>02}'.format(yr, mo, d)
+        time_greg = '{:>02}:{:>02}:{:>02}'.format(h, minute, sec)
 
-        # LOOP THROUGH HOURS IN DAY ============================================
-        for hr in np.arange(hoursPerDay):
-            for f in np.arange(0,1,dt):
+        # XXX LOOP THROUGH HOURS IN DAY ===================
+        # XXX for hr in np.arange(hoursPerDay):
+        # XXX for f in np.arange(0,1,dt):
 
-                # UPDATE HOUR, GET NEW JULIAN DATE -----------------------------
-                curMin = int(f * 60)
-                fHr = hr + f
-                curRegTime = '{:>02}:{:>02}:{:>02}'.format(hr, curMin, sec)
-                newJD = date_to_jd(curRegDate, curRegTime)
+        # UPDATE HOUR, GET NEW JULIAN DATE -----------------------------
+        # XXX curMin = int(f * 60)
+        # XXX fHr = hr + f
+        # XXX curRegTime = '{:>02}:{:>02}:{:>02}'.format(hr, curMin, sec)
+        newJD = date_to_jd(date_greg, time_greg)# XXX , curRegTime)
 
-                # GET MOON PHASE AT THIS HOUR ----------------------------------
-                nuHr = get_moon_phase(newJD)
+        # GET MOON PHASE AT THIS HOUR ----------------------------------
+        nuHr = get_moon_phase(newJD)
 
-                # LOOP OVER LONGITUDES =========================================
-                for l in longs:
-                    # CALCULATE SOLAR LOCAL TIME -------------------------------
-                    slt = fHr + l/W
-                    if slt < 0:           # Wrap around behavior, Earth = sphere
-                        slt += 24
-                    elif slt > 24:
-                        slt -= 24
-                    else:
-                        pass
+        # LOOP OVER LONGITUDES =========================================
+        for L in longs:
+            # CALCULATE SOLAR LOCAL TIME -------------------------------
+            slt = t % 24 + L/W     # XXX fHr + L/W
+            if slt < 0:           # Wrap around behavior, Earth = sphere
+                slt += 24
+            elif slt > 24:
+                slt -= 24
+            else:
+                pass
 
-                    # CALCULATE LUNAR LOCAL TIME -------------------------------
-                    llt = slt - nuHr
-                    llt = llt + 24 if llt < 0 else llt
+            # CALCULATE LUNAR LOCAL TIME -------------------------------
+            llt = slt - nuHr
+            llt = llt + 24 if llt < 0 else llt
 
-                    # CALCULATE THE TIDES --------------------------------------
+            # CALCULATE THE TIDES --------------------------------------
 
-                    # Assign amplitudes
-                    # Background
-                    if type(A) == int:
-                        tide = A
-                    else:
-                        tide = A(hr, l)
+            # Assign amplitudes
+            # Background
+            if type(A) == int:
+                tide = A
+            else:
+                tide = A(t, L)
 
-                    # Solar
-                    if type(S) == int:
-                        A_S = S
-                    else:
-                        A_S = S(hr, l)
+            # Solar
+            if type(S) == int:
+                A_S = S
+            else:
+                A_S = S(t, L)
 
-                    # Lunar
-                    if type(L) == int:
-                        A_L = L
-                    else:
-                        A_L = L(hr, l)
+            # Lunar
+            if type(M) == int:
+                A_L = M
+            else:
+                A_L = M(t, L)
 
-                    # Assign phase
-                    if type(phi) == int:
-                        p = phi
-                    else:
-                        p = phi(hr)
+            # Assign phase
+            if type(phi) == int:
+                p = phi
+            else:
+                p = phi(t)
 
-                    for n in nRange:
-                        for s in sRange:
-                            if component == 'solar':
-                                tide += A_S * cos((W*n)*fHr + s*l - p)
-                            elif component == 'lunar':
-                                #tide += A_L * cos((W*n)*(fHr-nuHr) + s*l - p)
-                                tide += A_L * cos((2*pi*n/24.84) * (fHr) +
-                                                  s*l - p)
-                            elif component == 's+l':
-                                tide += A_S * cos((W*n)*fHr + s*l - p) \
-                                      + A_L * cos((W*n)*(fHr-nuHr) + s*l - p)
-                    output[r, 0] = slt
-                    output[r, 1] = llt
-                    output[r, 2] = round(l * 180/pi)
-                    output[r, 3] = newJD
-                    output[r, 4] = fHr
-                    output[r, 5] = nuHr
-                    output[r, 6] = tide
-                    r += 1
+            for n in nRange:
+                for s in sRange:
+                    if component == 'solar':
+                        tide += A_S * cos((W*n)*t + s*L - p)
+                    elif component == 'lunar':
+                        #tide += A_L * cos((W*n)*(fHr-nuHr) + s*l - p)
+                        tide += A_L * cos((2*pi*n/24.84) * (t) +
+                                          s*L - p)
+                    elif component == 's+l':
+                        tide += A_S * cos((W*n)*t + s*L - p) \
+                              + A_L * cos((W*n)*(t-nuHr) + s*L - p)
+
+            output[r, 0] = slt
+            output[r, 1] = llt
+            output[r, 2] = round(L * 180/pi)
+            output[r, 3] = newJD
+            output[r, 4] = t
+            output[r, 5] = nuHr
+            output[r, 6] = tide
+            r += 1
+
 
     #FORMAT HEADER LINE, WRITE FILE --------------------------------------------
     cells = '{:<20}\t'*7
@@ -251,9 +257,9 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     np.savetxt(filename, output, fmt='%-20.4f', delimiter='\t', header=line0,
                comments='')
 
-    #M2ONLY120 = output[np.where(output[:,2]==-120)]
+    M2ONLY120 = output[np.where(output[:,2]==-120)]
 
-    return output
+    return output, M2ONLY120
 
 
 def bin_by_solar(data):
