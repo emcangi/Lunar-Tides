@@ -277,28 +277,39 @@ def bin_by_solar(data):
     means = []
 
     # FIND UNIQUE SOLAR LOCAL TIMES --------------------------------------------
-    slt_array = data[:, 0]
-    slt_list = np.ndarray.tolist(slt_array)
-    unique_slt = set([round(x, 4) for x in slt_list])
+    # slt_array = data[:, 0]
+    # slt_list = np.ndarray.tolist(slt_array)
+    # unique_slt = set([round(x, 4) for x in slt_list])
 
     # round the values to avoid problems with precision problems in checking
     # for matches
-    slt_array_rounded = np.around(slt_array, decimals=4)
+    # slt_array_rounded = np.around(slt_array, decimals=4)
+
+    # Build array of just the slt, long and data
+    col0 = np.around(data[:,0], decimals=4)
+    col1 = np.around(data[:, 2], decimals=4)
+    d = np.column_stack((col0, col1, data[:,6]))
+
+    longitudes = range(-180, 180, 15)
+    n_lon = len(longitudes)
+
+    # create an array to store the results
+    means = np.zeros([n_lon * 24, 3])
+    means[:,0] = list(range(0, 24)) * n_lon
+
+    s = 0
 
     # ITERATE OVER SOLAR LOCAL TIMES & LONGITUDES ----------------------------
-    for val in unique_slt:
-        for lon in range(-180, 180, 15):
-            # find data entries where the SLT matches current iterative value
-            slice1 = data[np.where(slt_array_rounded == val)]
-            lons_rounded = np.around(slice1[:, 2], decimals=4)
-            # find data entries in slice1 where the longitudes also match
-            slice2 = slice1[np.where(lons_rounded == lon)]
+    for lon in longitudes:
+        slt_means = [0]*12
+        data_by_lon = d[np.where(d[:, 1] == lon)]
+        for row in data_by_lon:
+            i = int(row[0]) # convert slt to an int
+            slt_means[i] += row[2]
 
-            if slice2.size != 0:
-                vals_to_avg = slice2[:,6]
-                means.append([val, lon, np.mean(vals_to_avg)])
-
-    means = np.asarray(means)
+        means[0:s + 24, 1] = lon
+        means[0:s + 24, 2] = slt_means
+        s += 24
 
     return means
 
