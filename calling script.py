@@ -9,7 +9,7 @@ from solar_extraction import *
 
 subs = []
 totals = []
-dts = [0.1, 0.25, 1]
+dts = [0.1, 0.2, 0.3]
 
 for dt in dts:
 
@@ -18,18 +18,21 @@ for dt in dts:
     # Background = 0sd
     # Constant amplitude and phase
     #============================================================================#
-    # data1S = generate_tides('2016-01-01', '2016-01-02', amps=[0,10,10], phase='C',
-    #                         dt=dt, nRange=[1,2], sRange=[1,2], component='solar')
+    data1S, SW2only120 = generate_tides('2016-01-01', '2016-01-03',
+                                        amps=[0,10,10], phase='C', dt=dt,
+                                        nRange=[2], sRange=[2],
+                                        filename='SW2_revised.txt',
+                                        component='solar')
 
     #============================================================================#
     # Generate M2 data
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1L, M2only120 = generate_tides('2016-01-01', '2016-01-05',
+    data1M, M2only120 = generate_tides('2016-01-01', '2016-01-03',
                                        amps=[0,10,10], phase='C', dt=dt,
                                        nRange=[2], sRange=[2],
-                                       filename='M2_revised.txt'.format(dt),
+                                       filename='M2_revised.txt',
                                        component='lunar')
 
     #============================================================================#
@@ -37,31 +40,35 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    # data1T = generate_tides('2016-01-01', '2016-01-02', amps=[0,10,10], phase='C',
-    #                         dt=dt, nRange=[2], sRange=[2], filename='TT_scenario1.txt',
-    #                         component='s+l')
+    data1T, TTonly120 = generate_tides('2016-01-01', '2016-01-03',
+                                       amps=[0,10,10], phase='C', dt=dt,
+                                       nRange=[2], sRange=[2],
+                                       filename='TT_scenario1.txt',
+                                        component='s+l')
 
-    # Bin by local time
-
-    # Save a file
-    np.savetxt('M2_lon-120_dt={}_revised.txt'.format(dt), M2only120,
-               fmt='%-20.4f', delimiter='\t')
-
-    means1L = bin_by_solar(data1L)
-    np.savetxt('means1L_dt={}_revised.txt'.format(dt), means1L, fmt='%-20.4f',
+    # Save a file for one longitude only
+    np.savetxt('SW2_revised_lon=-120.txt', SW2only120, fmt='%20.4f',
                delimiter='\t')
+    np.savetxt('M2_revised_lon=-120.txt', M2only120, fmt='%20.4f',
+               delimiter='\t')
+    np.savetxt('TT_revised_lon=-120.txt', TTonly120, fmt='%20.4f',
+               delimiter='\t')
+
+    means1T = bin_by_solar(data1T)
+    # np.savetxt('means1L_dt={}_revised.txt'.format(dt), means1L, fmt='%-20.4f',
+    #            delimiter='\t')
 
 
     # Subtract the averages according to solar local time
-    avgs, nosol1T = remove_solar(data1L, means1L)
+    avgs, nosol1T = remove_solar(data1T, means1T)
 
     subs.append(avgs)
-    totals.append(data1L)
+    totals.append(data1T)
 
-plot_vs_date_multi(subs, -120, title='Lunar semidiurnal tide and average over '
-                    'SLT,', dts=dts, data2=totals, c=['red', 'darkorchid'],
-                   lb=['Lunar avg by SLT', 'lunar semidiurnal original'],
-                   mode='show')
+plot_vs_date_multi(subs, -120, title='Tides and average over SLT, small dt,',
+                   dts=dts, data2=totals, c=['red', 'darkorchid'],
+                   lb=['Avg by SLT', 'SW2 + M2 tides'],
+                   mode='both')
 
 # Bin the results by lunar local time
 #result = bin_by_lunar(nosol1T, '1T')

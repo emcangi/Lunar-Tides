@@ -154,12 +154,12 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     ti = date_to_jd(startDate, '00:00:00')
     tf = date_to_jd(endDate, '00:00:00')
     n_days = int(tf - ti) + 1        # +1 to include the last day in the loops
-    n_timesteps = ((24 / dt) * n_days)
-    timesteps = np.arange(0, n_timesteps, dt)
+    n_hours = 24 * n_days
+    timesteps = np.arange(0, n_hours, dt)
     dt_conv = 0.0416667 / 1           # 0.0416667 JD / 1 hour
 
     # MAKE OUTPUT ARRAY --------------------------------------------------------
-    rows = numLongs * n_timesteps
+    rows = numLongs * (n_hours / dt)
     output = np.empty([rows,7])
     r = 0
 
@@ -189,7 +189,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
         # LOOP OVER LONGITUDES =========================================
         for L in longs:
             # CALCULATE SOLAR LOCAL TIME -------------------------------
-            slt = t % 24 + L/W     # XXX fHr + L/W
+            slt = (t % 24) + (L/W)     # XXX fHr + L/W
             if slt < 0:           # Wrap around behavior, Earth = sphere
                 slt += 24
             elif slt > 24:
@@ -233,9 +233,8 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
                     if component == 'solar':
                         tide += A_S * cos((W*n)*t + s*L - p)
                     elif component == 'lunar':
-                        #tide += A_L * cos((W*n)*(fHr-nuHr) + s*l - p)
-                        tide += A_L * cos((2*pi*n/24.84) * (t) +
-                                          s*L - p)
+                        tide += A_L * cos((W*n)*(t-nuHr) + s*L - p)
+                        #tide += A_L * cos((2*pi*n/24.84)*t + s*L - p)
                     elif component == 's+l':
                         tide += A_S * cos((W*n)*t + s*L - p) \
                               + A_L * cos((W*n)*(t-nuHr) + s*L - p)
@@ -248,7 +247,6 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
             output[r, 5] = nuHr
             output[r, 6] = tide
             r += 1
-
 
     #FORMAT HEADER LINE, WRITE FILE --------------------------------------------
     cells = '{:<20}\t'*7
