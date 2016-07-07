@@ -9,7 +9,7 @@ from solar_extraction import *
 
 subs = []
 totals = []
-dts = [0.1, 0.2, 0.3]
+dts = [1,1.2]
 
 for dt in dts:
 
@@ -18,7 +18,7 @@ for dt in dts:
     # Background = 0sd
     # Constant amplitude and phase
     #============================================================================#
-    data1S, SW2only120 = generate_tides('2016-01-01', '2016-01-03',
+    data1S, SW2only120 = generate_tides('2016-01-01', '2016-01-30',
                                         amps=[0,10,10], phase='C', dt=dt,
                                         nRange=[2], sRange=[2],
                                         filename='SW2_revised.txt',
@@ -29,7 +29,7 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1M, M2only120 = generate_tides('2016-01-01', '2016-01-03',
+    data1M, M2only120 = generate_tides('2016-01-01', '2016-01-30',
                                        amps=[0,10,10], phase='C', dt=dt,
                                        nRange=[2], sRange=[2],
                                        filename='M2_revised.txt',
@@ -54,21 +54,29 @@ for dt in dts:
     np.savetxt('TT_revised_lon=-120.txt', TTonly120, fmt='%20.4f',
                delimiter='\t')
 
-    means1T = bin_by_solar(data1T)
-    # np.savetxt('means1L_dt={}_revised.txt'.format(dt), means1L, fmt='%-20.4f',
-    #            delimiter='\t')
+    means1M = bin_by_solar(data1M)
+    np.savetxt('means1T_dt={}_revised.txt'.format(dt), means1M, fmt='%-20.4f',
+                delimiter='\t')
 
 
     # Subtract the averages according to solar local time
-    avgs, nosol1T = remove_solar(data1T, means1T)
+    avgs, nosol1T = remove_solar(data1M, means1M)
+    longs = np.around(avgs[:, 2], decimals=4)
+    subs120 = avgs[np.where(longs==-120)]
+    np.savetxt('M_subtractedvals_dt={}_revised.txt'.format(dt), avgs,
+               fmt='%-20.4f',
+               delimiter='\t')
+    np.savetxt('M_subtracted_values_long=-120.txt', subs120, fmt='%-20.4f',
+               delimiter='\t')
 
     subs.append(avgs)
-    totals.append(data1T)
+    totals.append(data1M)
 
-plot_vs_date_multi(subs, -120, title='Tides and average over SLT, small dt,',
+plot_vs_date_multi(subs, -120, title='Lunar tide and average over SLT, '
+                                     'vary dt,',
                    dts=dts, data2=totals, c=['red', 'darkorchid'],
-                   lb=['Avg by SLT', 'SW2 + M2 tides'],
-                   mode='both')
+                   lb=['M2 Avg by SLT', 'M2 original'],
+                   mode='save')
 
 # Bin the results by lunar local time
 #result = bin_by_lunar(nosol1T, '1T')

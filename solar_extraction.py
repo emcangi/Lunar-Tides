@@ -148,7 +148,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
 
     # DEFINE LONGITUDE GRID ----------------------------------------------------
     numLongs = 360 // longIncr
-    longs = np.asarray([l*pi/180 for l in list(range(-180, 180, longIncr))])
+    longs = np.asarray([l*pi/180 for l in list(range(-180,180, longIncr))])
 
     # SET UP TIME RELATED VARIABLES --------------------------------------------
     ti = date_to_jd(startDate, '00:00:00')
@@ -192,7 +192,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
             slt = (t % 24) + (L/W)     # XXX fHr + L/W
             if slt < 0:           # Wrap around behavior, Earth = sphere
                 slt += 24
-            elif slt > 24:
+            elif slt >= 24:
                 slt -= 24
             else:
                 pass
