@@ -181,7 +181,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
         # XXX curMin = int(f * 60)
         # XXX fHr = hr + f
         # XXX curRegTime = '{:>02}:{:>02}:{:>02}'.format(hr, curMin, sec)
-        newJD = date_to_jd(date_greg, time_greg)# XXX , curRegTime)
+        newJD = date_to_jd(date_greg, time_greg)
 
         # GET MOON PHASE AT THIS HOUR ----------------------------------
         nuHr = get_moon_phase(newJD)
@@ -189,7 +189,7 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
         # LOOP OVER LONGITUDES =========================================
         for L in longs:
             # CALCULATE SOLAR LOCAL TIME -------------------------------
-            slt = (t % 24) + (L/W)     # XXX fHr + L/W
+            slt = (t % 24) + (L/W)
             if slt < 0:           # Wrap around behavior, Earth = sphere
                 slt += 24
             elif slt >= 24:
@@ -260,51 +260,68 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     return output, M2ONLY120
 
 
-def bin_by_solar(data):
+def bin_by_solar(data, size):
     """
     Finds the mean of the solar contribution at a given solar local time.
     Returns means for each pair of a unique solar local time and longitude.
-    Note that there is some funky handling of the sections of the array where
-    the SLT and longitudes are since Python has weirdness with float precision.
     ---INPUT---
         data        Array of tidal data
+        size        Bin size in hours
     ---OUTPUT---
         means       3-column array, columns: solar local time, longitude,
                     mean solar contribution.
     """
 
-    # Build array of just the slt, long and data
-    col0 = np.around(data[:,0], decimals=4)
+    # Build array of just the slt, long and data. Rounding is to avert
+    # potential precision weirdness with python causing failures in finding
+    # data points for each longitude later.
+    col0 = np.around(data[:, 0], decimals=4)
     col1 = np.around(data[:, 2], decimals=4)
     d = np.column_stack((col0, col1, data[:,6]))
 
     longitudes = range(-180, 180, 15)
     n_lon = len(longitudes)
 
+    # number of bins: 24 hours divided by bin size in hours
+    n = int(24 / size)
+
     # create an array to store the results
-    means = np.zeros([n_lon * 24, 3])
-    means[:, 0] = list(range(0, 24)) * n_lon
+    means = np.zeros([n_lon * n, 3])
+    means[:, 0] = list(range(0, n)) * n_lon
 
     s = 0
 
-    # ITERATE OVER SOLAR LOCAL TIMES  ------------------------------------------
+    # ITERATE OVER LONGITUDES  ------------------------------------------
     for lon in longitudes:
-        slt_sum = np.zeros([24])    # for totaling all values for a given SLT
-        slt_vals = np.zeros([24])   # to keep track of number of values added up
+        slt_sum = np.zeros([n])       # for totaling all values per SLT
+        slt_vals = np.zeros([n])      # track number of summed values
         data_by_lon = d[np.where(d[:, 1] == lon)]
 
+        # Iterate over data points for each longitude
         for row in data_by_lon:
-            i = int(row[0])  # convert slt to an int
-            if i == 24:
+
+            # Identify bins
+            if size == 0.5:           # 30 minute bins
+                i = int(row[0] * 2)
+            elif size == 1:           # hour bins
+                i = int(row[0])
+            if i == n:
                 i = 0
+
             slt_sum[i] += row[2]
             slt_vals[i] += 1
 
         slt_means = slt_sum / slt_vals
 
-        means[s:s + 24, 1] = lon
-        means[s:s + 24, 2] = slt_means
-        s += 24
+        print('Longitude {}'.format(lon))
+        # print('Sum of SLT: {}'.format(slt_sum[0]))
+        # print('Total values used: {}'.format(slt_vals[0]))
+        print('Means of SLT: {}'.format(slt_means))
+        print()
+
+        means[s:s + n, 1] = lon
+        means[s:s + n, 2] = slt_means
+        s += n
 
     return means
 
@@ -333,9 +350,12 @@ def remove_solar(original, means):
         slt = row[0]
         long = row[1]
         avg = row[2]
-        # find rows in original data that match
-        # NEED TO FIX THIS
-        i = np.where((original[:, 0] == slt) & (original[:, 2] == long))[0]
+
+        # these next two lines may be redundant but it's just to avoid any
+        # possible precision errors
+        col0 = np.around(original[:, 0], decimals=4)
+        col2 = np.around(original[:, 2], decimals=4)
+        i = np.where((col0 == slt) & (col2 == long))[0]
         solar_to_subtract[i, 6] = avg
         difference[i, 6] = original[i, 6] - avg
 
