@@ -12,13 +12,12 @@ totals = []
 dts = [0.1, 0.5, 1]
 
 for dt in dts:
-    print('TIMESTEP SIZE = {}'.format(dt))
     #==========================================================================#
     # Generate SW2 data
     # Background = 0sd
     # Constant amplitude and phase
     #==========================================================================#
-    data1S, SW2_120 = generate_tides('2016-01-01', '2016-01-02',
+    data1S, SW2_120 = generate_tides('2016-01-01', '2016-01-04',
                                      amps=[0, 10, 10], phase='C', dt=dt,
                                      nRange=[2], sRange=[2],
                                      filename='SW2_revised_dt{}.txt'.format(dt),
@@ -29,7 +28,7 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1M, M2_120 = generate_tides('2016-01-01', '2016-01-02',
+    data1M, M2_120 = generate_tides('2016-01-01', '2016-01-04',
                                     amps=[0,10,10], phase='C', dt=dt,
                                     nRange=[2], sRange=[2],
                                     filename='M2_revised_dt{}.txt'.format(dt),
@@ -40,36 +39,37 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1T, TT_120 = generate_tides('2016-01-01', '2016-01-02',
+    data1T, TT_120 = generate_tides('2016-01-01', '2016-01-04',
                                     amps=[0,10,10], phase='C', dt=dt,
                                     nRange=[2], sRange=[2],
                                     filename='TT_revised_dt{}.txt'.format(dt),
                                     component='s+l')
 
     # Save a file for one longitude only
-    np.savetxt('SW2_revised_lon=-120_dt{}.txt'.format(dt), SW2_120,
-               fmt='%20.4f', delimiter='\t')
+    # np.savetxt('SW2_revised_lon=-120_dt{}.txt'.format(dt), SW2_120,
+    #            fmt='%20.4f', delimiter='\t')
     # np.savetxt('M2_revised_lon=-120.txt', M2_120, fmt='%20.4f',
     #            delimiter='\t')
     # np.savetxt('TT_revised_lon=-120.txt', TT_120, fmt='%20.4f',
     #            delimiter='\t')
 
-    means = bin_by_solar(data1S, 1)
-    # np.savetxt('means1T_dt={}_revised.txt'.format(dt), means1T, fmt='%-20.4f',
+    means = bin_by_solar(data1S, 0.5)
+    # np.savetxt('means_dt={}.txt'.format(dt), means, fmt='%-20.4f',
     #             delimiter='\t')
 
 
     # Subtract the averages according to solar local time
-    avgs, nosol1 = remove_solar(data1S, means)
-    longs = np.around(avgs[:, 2], decimals=4)
-    subs120 = avgs[np.where(longs==-120)]
-    np.savetxt('SW2_revised_lon=-120_dt={}_subtracts.txt'.format(dt), subs120,
-                fmt='%-20.4f', delimiter='\t')
-
+    avgs, nosol1 = remove_solar(data1S, means, 0.5)
+    # longs = np.around(avgs[:, 2], decimals=4)
+    # subs120 = avgs[np.where(longs==-120)]
+    # np.savetxt('SW2_lon=-120_dt={}_subtracts_restricted_to_120.txt'.format(dt),
+    #            avgs, fmt='%-20.4f', delimiter='\t')
+    #
     subs.append(avgs)
     totals.append(data1S)
 
-plot_vs_date_multi(subs, -120, title='SW2 tide and average over SLT, ',
+plot_vs_date_multi(subs, -120, title='SW2 tide and average over SLT, '
+                                     'bin=30min,',
                    dts=dts, data2=totals, c=['red', 'orange'],
                    lb=['SW2 tide average by SLT', 'SW2 original'],
                    mode='both')

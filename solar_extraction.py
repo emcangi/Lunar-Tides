@@ -263,12 +263,12 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
 def bin_by_solar(data, size):
     """
     Finds the mean of the solar contribution at a given solar local time.
-    Returns means for each pair of a unique solar local time and longitude.
+    Returns output for each pair of a unique solar local time and longitude.
     ---INPUT---
         data        Array of tidal data
         size        Bin size in hours
     ---OUTPUT---
-        means       3-column array, columns: solar local time, longitude,
+        output       3-column array, columns: solar local time, longitude,
                     mean solar contribution.
     """
 
@@ -279,15 +279,17 @@ def bin_by_solar(data, size):
     col1 = np.around(data[:, 2], decimals=4)
     d = np.column_stack((col0, col1, data[:,6]))
 
-    longitudes = range(-180, 180, 15)
+    # the +1 is just to handle the case that only data for one longitude has
+    # been fed in
+    longitudes = range(int(min(col1)), int(max(col1))+1, 15)
     n_lon = len(longitudes)
 
     # number of bins: 24 hours divided by bin size in hours
     n = int(24 / size)
 
     # create an array to store the results
-    means = np.zeros([n_lon * n, 3])
-    means[:, 0] = list(range(0, n)) * n_lon
+    output = np.zeros([n_lon * n, 3])
+    output[:, 0] = list(np.arange(0, 24, size)) * n_lon
 
     s = 0
 
@@ -295,11 +297,10 @@ def bin_by_solar(data, size):
     for lon in longitudes:
         slt_sum = np.zeros([n])       # for totaling all values per SLT
         slt_vals = np.zeros([n])      # track number of summed values
-        data_by_lon = d[np.where(d[:, 1] == lon)]
+        data_by_lon = d[np.where(d[:, 1] == lon)]  # find data at this longitude
 
-        # Iterate over data points for each longitude
+        # Iterate over data points that we found
         for row in data_by_lon:
-
             # Identify bins
             if size == 0.5:           # 30 minute bins
                 i = int(row[0] * 2)
@@ -308,25 +309,22 @@ def bin_by_solar(data, size):
             if i == n:
                 i = 0
 
+            # build sum of values and array of numbers of values
             slt_sum[i] += row[2]
             slt_vals[i] += 1
 
         slt_means = slt_sum / slt_vals
 
-        print('Longitude {}'.format(lon))
-        # print('Sum of SLT: {}'.format(slt_sum[0]))
-        # print('Total values used: {}'.format(slt_vals[0]))
-        print('Means of SLT: {}'.format(slt_means))
-        print()
-
-        means[s:s + n, 1] = lon
-        means[s:s + n, 2] = slt_means
+        # append means and corresponding longitudes to the output array,
+        # then increment s by the length of the output slt_means array.
+        output[s:s + n, 1] = lon
+        output[s:s + n, 2] = slt_means
         s += n
 
-    return means
+    return output
 
 
-def remove_solar(original, means):
+def remove_solar(original, means, binsize):
     """
     Subtract off the solar tidal averages. Iterates through the file holding
     solar tidal average data per solar local time and longitude.
@@ -335,6 +333,8 @@ def remove_solar(original, means):
                     time, longitude, lunar Julian date, hour, moon phase and
                     total tidal value.
         means       Data array containing SLT, longitude and mean tidal value.
+        binsize     Bin size information, needed to determine which data points
+                    to subtract the means from.
     --OUTPUT--
         result      Array holding original data for columns 0-5 and the
                     "reconstructed" lunar tidal values in column 6
@@ -351,10 +351,24 @@ def remove_solar(original, means):
         long = row[1]
         avg = row[2]
 
-        # these next two lines may be redundant but it's just to avoid any
-        # possible precision errors
-        col0 = np.around(original[:, 0], decimals=4)
-        col2 = np.around(original[:, 2], decimals=4)
+        # Truncation assures that averages, which are binned by hour,
+        # are subtracted from all data with SLT within a certain hour.
+        if binsize == 1:
+            col0 = np.trunc(original[:, 0])
+        elif binsize == 0.5:
+            col0 = np.zeros([original[:, 0].size])
+            for entry in range(original[:, 0].size):
+                time = original[:, 0][entry]
+                if time % 0.5 == 0:
+                    col0[entry] = time
+                else:
+                    modifier = time - int(time)
+                    if modifier > 0.5:
+                        modifier -= 0.5
+                    col0[entry] = time - modifier
+
+        col2 = original[:, 2]
+
         i = np.where((col0 == slt) & (col2 == long))[0]
         solar_to_subtract[i, 6] = avg
         difference[i, 6] = original[i, 6] - avg
@@ -524,8 +538,8 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
     # Set common labels
     mainax.set_xlabel('Julian Date', labelpad=25)
     mainax.set_ylabel('Tide amplitude', labelpad=25)
-    mainax.set_title('{} by Julian date at {}° Longitude'.format(title, long),
-                     y=1.08)
+    title = '{} at {}° Longitude'.format(title, long)
+    mainax.set_title(title, y=1.08)
 
     # FIND ROWS IN ARRAY WITH MATCHING LONGITUDE -----------------------------
     for j in range(len(dts)):
@@ -551,15 +565,14 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
     fig.tight_layout()
     plt.rcParams.update({'font.size': 16})
 
+    fn = title
     if mode == 'show':
         plt.show()
         plt.close()
     elif mode == 'save':
-        fn = '{} by Julian date at {}° Longitude'.format(title, long)
         plt.savefig(fn, bbox_inches='tight')
         plt.close()
     elif mode == 'both':
-        fn = '{} by Julian date at {}° Longitude'.format(title, long)
         plt.savefig(fn, bbox_inches='tight')
         plt.show()
         plt.clf()
