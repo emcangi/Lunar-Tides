@@ -268,22 +268,10 @@ def bin_by_solar(data):
     the SLT and longitudes are since Python has weirdness with float precision.
     ---INPUT---
         data        Array of tidal data
-        filename    Name for output file
     ---OUTPUT---
         means       3-column array, columns: solar local time, longitude,
                     mean solar contribution.
     """
-
-    means = []
-
-    # FIND UNIQUE SOLAR LOCAL TIMES --------------------------------------------
-    # slt_array = data[:, 0]
-    # slt_list = np.ndarray.tolist(slt_array)
-    # unique_slt = set([round(x, 4) for x in slt_list])
-
-    # round the values to avoid problems with precision problems in checking
-    # for matches
-    # slt_array_rounded = np.around(slt_array, decimals=4)
 
     # Build array of just the slt, long and data
     col0 = np.around(data[:,0], decimals=4)
@@ -295,20 +283,27 @@ def bin_by_solar(data):
 
     # create an array to store the results
     means = np.zeros([n_lon * 24, 3])
-    means[:,0] = list(range(0, 24)) * n_lon
+    means[:, 0] = list(range(0, 24)) * n_lon
 
     s = 0
 
-    # ITERATE OVER SOLAR LOCAL TIMES & LONGITUDES ----------------------------
+    # ITERATE OVER SOLAR LOCAL TIMES  ------------------------------------------
     for lon in longitudes:
-        slt_means = [0]*12
+        slt_sum = np.zeros([24])    # for totaling all values for a given SLT
+        slt_vals = np.zeros([24])   # to keep track of number of values added up
         data_by_lon = d[np.where(d[:, 1] == lon)]
-        for row in data_by_lon:
-            i = int(row[0]) # convert slt to an int
-            slt_means[i] += row[2]
 
-        means[0:s + 24, 1] = lon
-        means[0:s + 24, 2] = slt_means
+        for row in data_by_lon:
+            i = int(row[0])  # convert slt to an int
+            if i == 24:
+                i = 0
+            slt_sum[i] += row[2]
+            slt_vals[i] += 1
+
+        slt_means = slt_sum / slt_vals
+
+        means[s:s + 24, 1] = lon
+        means[s:s + 24, 2] = slt_means
         s += 24
 
     return means
@@ -333,15 +328,16 @@ def remove_solar(original, means):
     difference = np.array(original)
 
     # For each SLT and longitude pair, find row in original data where solar
-    # local time and longitude match. Then subtract the solar tidal data
+    # local time and longitude match. Then subtract the average tide
     for row in means:
         slt = row[0]
         long = row[1]
         avg = row[2]
         # find rows in original data that match
-        i = np.where((original[:,0]==slt) & (original[:,2]==long))[0]
-        solar_to_subtract[i,6] = avg
-        difference[i,6] = original[i,6] - avg
+        # NEED TO FIX THIS
+        i = np.where((original[:, 0] == slt) & (original[:, 2] == long))[0]
+        solar_to_subtract[i, 6] = avg
+        difference[i, 6] = original[i, 6] - avg
 
     return solar_to_subtract, difference
 
