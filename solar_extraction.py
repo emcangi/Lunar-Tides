@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from math import pi, cos
 
 
 def jd_to_date(jd):
@@ -102,8 +103,7 @@ def get_moon_phase(now):
 
 
 def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
-                   nRange=range(1,3), sRange=range(-6,7), filename='tides.txt',
-                   component='solar'):
+                   nrange=[2], srange=[2], filename=None, component='solar'):
     """
     Generates tidal data using the equation:
     A + ΣΣS_{ns}*cos[Ωnt + sλ - Φ_{ns}] + ΣΣL_{ns}*cos[Ωnt + sλ - Φ_{ns}]
@@ -122,8 +122,8 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
         amps            list of amplitude values (length = 3).
         phase           whether phase varies (value = 'V') or is constant ('C')
         dt              timestep for data generation in hours. 0.25 = 15 min
-        nRange          values of n to use in calculation
-        sRange          values of s to use in calculation
+        nrange          values of n to use in calculation
+        srange          values of s to use in calculation
         filename        filename to write values to
         component       solar, lunar, s+l (solar+lunar) or all; specifies
                         summation bounds for n and s
@@ -134,7 +134,6 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
 
     Adapted from script by Dr. Ruth Lieberman by Eryn Cangi for LASP REU 2016.
     """
-    from math import pi, cos
 
     # VARIABLES ----------------------------------------------------------------
     W = 2 * pi / 24                # Earth rotation rate (omega)
@@ -165,22 +164,12 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
 
     # LOOP THROUGH TIMESTEPS ===================================================
     for t in timesteps:
-        ## XXX curJulDate = ti + day
         t_jul = ti + t * dt_conv       # Add current hour number in Julian time
 
         # GET REGULAR DATE FOR CALCULATIONS ------------------------------------
         yr, mo, d, h, minute, sec = jd_to_date(t_jul)
         date_greg = '{}-{:>02}-{:>02}'.format(yr, mo, d)
         time_greg = '{:>02}:{:>02}:{:>02}'.format(h, minute, sec)
-
-        # XXX LOOP THROUGH HOURS IN DAY ===================
-        # XXX for hr in np.arange(hoursPerDay):
-        # XXX for f in np.arange(0,1,dt):
-
-        # UPDATE HOUR, GET NEW JULIAN DATE -----------------------------
-        # XXX curMin = int(f * 60)
-        # XXX fHr = hr + f
-        # XXX curRegTime = '{:>02}:{:>02}:{:>02}'.format(hr, curMin, sec)
         newJD = date_to_jd(date_greg, time_greg)
 
         # GET MOON PHASE AT THIS HOUR ----------------------------------
@@ -203,24 +192,24 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
 
             # CALCULATE THE TIDES --------------------------------------
 
-            # Assign amplitudes
+            # Assign amplitudes, whether actual numbers or variable functions
             # Background
             if type(A) == int:
                 tide = A
             else:
-                tide = A(t, L)
+                tide = A(W, t, L)
 
             # Solar
             if type(S) == int:
                 A_S = S
             else:
-                A_S = S(t, L)
+                A_S = S(W, t, L)
 
             # Lunar
             if type(M) == int:
                 A_L = M
             else:
-                A_L = M(t, L)
+                A_L = M(W, t, L)
 
             # Assign phase
             if type(phi) == int:
@@ -228,13 +217,12 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
             else:
                 p = phi(t)
 
-            for n in nRange:
-                for s in sRange:
+            for n in nrange:
+                for s in srange:
                     if component == 'solar':
                         tide += A_S * cos((W*n)*t + s*L - p)
                     elif component == 'lunar':
                         tide += A_L * cos((W*n)*(t-nuHr) + s*L - p)
-                        #tide += A_L * cos((2*pi*n/24.84)*t + s*L - p)
                     elif component == 's+l':
                         tide += A_S * cos((W*n)*t + s*L - p) \
                               + A_L * cos((W*n)*(t-nuHr) + s*L - p)
@@ -248,28 +236,29 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
             output[r, 6] = tide
             r += 1
 
-    #FORMAT HEADER LINE, WRITE FILE --------------------------------------------
-    cells = '{:<20}\t'*7
-    line0 = cells.format('Solar local time', 'Lunar local time', 'Longitude',
-                         'Julian Date', 'UT', 'Moon phase (hrs)', 'Tide')
-    np.savetxt(filename, output, fmt='%-20.4f', delimiter='\t', header=line0,
-               comments='')
+    # Write output array to file (only if requested)
+    if filename != None:
+        cells = '{:<20}\t'*7
+        line0 = cells.format('Solar local time', 'Lunar local time',
+                             'Longitude', 'Julian Date', 'UT',
+                             'Moon phase (hrs)', 'Tide')
+        np.savetxt(filename, output, fmt='%-20.4f', delimiter='\t',
+                   header=line0, comments='')
 
-    M2ONLY120 = output[np.where(output[:,2]==-120)]
-
-    return output, M2ONLY120
+    return output
 
 
-def bin_by_solar(data, binsize):
+def bin_by_solar(data, binsize, ts):
     """
     Finds the mean of the solar contribution at a given solar local time.
     Returns output for each pair of a unique solar local time and longitude.
     ---INPUT---
-        data        Array of tidal data
-        binsize        Bin size in hours
+        data          Array of tidal data
+        binsize       Bin size in hours
+        ts            Timestep - for use in indexing arrays properly
     ---OUTPUT---
-        output       3-column array, columns: solar local time, longitude,
-                    mean solar contribution.
+        output        3-column array, columns: solar local time, longitude,
+                      smean solar contribution.
     """
 
     # Build array of just the slt, long and data. Rounding is to avert
@@ -277,7 +266,7 @@ def bin_by_solar(data, binsize):
     # data points for each longitude later.
     col0 = np.around(data[:, 0], decimals=4)
     col2 = np.around(data[:, 2], decimals=4)
-    d = np.column_stack((col0, col2, data[:,6]))
+    d = np.column_stack((col0, col2, data[:, 6]))
 
     # the +1 is just to handle the case that only data for one longitude has
     # been fed in
@@ -303,7 +292,7 @@ def bin_by_solar(data, binsize):
         for row in data_by_lon:
             # Identify bins
             if binsize == 0.5:           # 30 minute bins
-                i = int(row[0] * 2)   # since indices can't be fractions
+                i = int(row[0] * 2)   # index can't be float => multiply by 1/ts
             elif binsize == 1:           # hour bins
                 i = int(row[0])
             if i == n:
@@ -343,7 +332,7 @@ def remove_solar(original, means, binsize):
 
     # create copy arrays
     solar_to_subtract = np.array(original)
-    difference = np.array(original)
+    diff = np.array(original)
 
     # For each SLT and longitude pair, find row in original data where solar
     # local time and longitude match. Then subtract the average tide
@@ -374,9 +363,9 @@ def remove_solar(original, means, binsize):
 
         i = np.where((col0 == slt) & (col2 == long))[0]
         solar_to_subtract[i, 6] = avg
-        difference[i, 6] = original[i, 6] - avg
+        diff[i, 6] = original[i, 6] - avg
 
-    return solar_to_subtract, difference
+    return diff
 
 
 def chisq(obs, exp):
@@ -560,7 +549,8 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None,
             ax[j].plot(times[:s], tides2[:s], color=c[1], marker=m, label=lb[1])
             if data3 != None:
                 tides3 = [data3[j][i, 6] for i in rows]
-                ax[j].plot(times[:s], tides3[:s], color=c[2], marker=m, label=lb[2])
+                ax[j].plot(times[:s], tides3[:s], color=c[2], marker=m,
+                           label=lb[2])
             ax[j].legend(loc='lower right')
         else:
             ax[j].plot(times, tides, marker=m)
