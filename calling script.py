@@ -7,9 +7,12 @@ Created on Wed Jun 29 17:48:40 2016
 
 from solar_extraction import *
 
-subs = []
+#subs = []
+minus_sol = []
 totals = []
-dts = [0.1, 0.5, 1]
+results = []
+dts = [0.25, 0.5, 1]
+binsize = 1
 
 for dt in dts:
     #==========================================================================#
@@ -17,7 +20,7 @@ for dt in dts:
     # Background = 0sd
     # Constant amplitude and phase
     #==========================================================================#
-    data1S, SW2_120 = generate_tides('2016-01-01', '2016-01-04',
+    data1S, SW2_120 = generate_tides('2016-01-01', '2016-01-15',
                                      amps=[0, 10, 10], phase='C', dt=dt,
                                      nRange=[2], sRange=[2],
                                      filename='SW2_revised_dt{}.txt'.format(dt),
@@ -28,7 +31,7 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1M, M2_120 = generate_tides('2016-01-01', '2016-01-04',
+    data1M, M2_120 = generate_tides('2016-01-01', '2016-01-15',
                                     amps=[0,10,10], phase='C', dt=dt,
                                     nRange=[2], sRange=[2],
                                     filename='M2_revised_dt{}.txt'.format(dt),
@@ -39,7 +42,7 @@ for dt in dts:
     # Background = 0
     # Constant amplitude and phase
     #============================================================================#
-    data1T, TT_120 = generate_tides('2016-01-01', '2016-01-04',
+    data1T, TT_120 = generate_tides('2016-01-01', '2016-01-15',
                                     amps=[0,10,10], phase='C', dt=dt,
                                     nRange=[2], sRange=[2],
                                     filename='TT_revised_dt{}.txt'.format(dt),
@@ -53,30 +56,42 @@ for dt in dts:
     # np.savetxt('TT_revised_lon=-120.txt', TT_120, fmt='%20.4f',
     #            delimiter='\t')
 
-    means = bin_by_solar(data1S, 0.5)
+    # BIN GENERATED DATA BY SOLAR LOCAL TIME ===================================
+    means = bin_by_solar(data1T, binsize)
     # np.savetxt('means_dt={}.txt'.format(dt), means, fmt='%-20.4f',
     #             delimiter='\t')
 
 
-    # Subtract the averages according to solar local time
-    avgs, nosol1 = remove_solar(data1S, means, 0.5)
+    # SUBTRACT AVERAGES BY SOLAR LOCAL TIME ====================================
+
+    avgs, nosol = remove_solar(data1T, means, binsize)
     # longs = np.around(avgs[:, 2], decimals=4)
     # subs120 = avgs[np.where(longs==-120)]
     # np.savetxt('SW2_lon=-120_dt={}_subtracts_restricted_to_120.txt'.format(dt),
     #            avgs, fmt='%-20.4f', delimiter='\t')
     #
-    subs.append(avgs)
-    totals.append(data1S)
+    #subs.append(avgs)
 
-plot_vs_date_multi(subs, -120, title='SW2 tide and average over SLT, '
-                                     'bin=30min,',
-                   dts=dts, data2=totals, c=['red', 'orange'],
-                   lb=['SW2 tide average by SLT', 'SW2 original'],
-                   mode='both')
 
-# Bin the results by lunar local time
-#result = bin_by_lunar(nosol1T, '1T')
-#print('Done with binning by lunar')
-# The following plot is done WITHOUT binning by LLT just to see how it looks.
-#compare_with_plot(result[:,6], data1L[:,6])
-#print('Done')
+    # Bin the results by lunar local time
+
+    means_llt = bin_by_lunar(nosol, binsize)
+    final_result = insert_llt_avgs(nosol, means_llt, binsize)
+
+    # build lists of result arrays to use for plotting
+    minus_sol.append(nosol)
+    totals.append(data1M)
+    results.append(final_result)
+
+# plot_vs_date_multi(minus_sol, -120, title='Total SW2+M2 and total - SLT avg, '
+#                                       'half lunar cycle, bin=30 min',
+#                    dts=dts, data2=totals, c=['blue', 'deepskyblue'],
+#                    lb=['Total - solar avg', 'Original M2'])
+
+
+
+plot_vs_date_multi(results, -120, title='Original and reconstructed M2 after '
+                                        'LLT bin, half lunar cycle, bin=1 hr',
+                                        dts=dts, data2=totals,
+                                        c=['blue', 'deepskyblue'],
+                                        lb=['Reconstructed M2', 'Original M2'])

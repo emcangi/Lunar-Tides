@@ -260,13 +260,13 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     return output, M2ONLY120
 
 
-def bin_by_solar(data, size):
+def bin_by_solar(data, binsize):
     """
     Finds the mean of the solar contribution at a given solar local time.
     Returns output for each pair of a unique solar local time and longitude.
     ---INPUT---
         data        Array of tidal data
-        size        Bin size in hours
+        binsize        Bin size in hours
     ---OUTPUT---
         output       3-column array, columns: solar local time, longitude,
                     mean solar contribution.
@@ -276,20 +276,20 @@ def bin_by_solar(data, size):
     # potential precision weirdness with python causing failures in finding
     # data points for each longitude later.
     col0 = np.around(data[:, 0], decimals=4)
-    col1 = np.around(data[:, 2], decimals=4)
-    d = np.column_stack((col0, col1, data[:,6]))
+    col2 = np.around(data[:, 2], decimals=4)
+    d = np.column_stack((col0, col2, data[:,6]))
 
     # the +1 is just to handle the case that only data for one longitude has
     # been fed in
-    longitudes = range(int(min(col1)), int(max(col1))+1, 15)
+    longitudes = range(int(min(col2)), int(max(col2))+1, 15)
     n_lon = len(longitudes)
 
     # number of bins: 24 hours divided by bin size in hours
-    n = int(24 / size)
+    n = int(24 / binsize)
 
     # create an array to store the results
     output = np.zeros([n_lon * n, 3])
-    output[:, 0] = list(np.arange(0, 24, size)) * n_lon
+    output[:, 0] = list(np.arange(0, 24, binsize)) * n_lon
 
     s = 0
 
@@ -302,9 +302,9 @@ def bin_by_solar(data, size):
         # Iterate over data points that we found
         for row in data_by_lon:
             # Identify bins
-            if size == 0.5:           # 30 minute bins
-                i = int(row[0] * 2)
-            elif size == 1:           # hour bins
+            if binsize == 0.5:           # 30 minute bins
+                i = int(row[0] * 2)   # since indices can't be fractions
+            elif binsize == 1:           # hour bins
                 i = int(row[0])
             if i == n:
                 i = 0
@@ -313,6 +313,7 @@ def bin_by_solar(data, size):
             slt_sum[i] += row[2]
             slt_vals[i] += 1
 
+        # get the mean
         slt_means = slt_sum / slt_vals
 
         # append means and corresponding longitudes to the output array,
@@ -351,21 +352,23 @@ def remove_solar(original, means, binsize):
         long = row[1]
         avg = row[2]
 
-        # Truncation assures that averages, which are binned by hour,
-        # are subtracted from all data with SLT within a certain hour.
         if binsize == 1:
             col0 = np.trunc(original[:, 0])
         elif binsize == 0.5:
-            col0 = np.zeros([original[:, 0].size])
-            for entry in range(original[:, 0].size):
-                time = original[:, 0][entry]
+            col0 = np.zeros([original[:, 0].size]) # to rebuild SLT list
+            for j in range(original[:, 0].size):
+                time = original[:, 0][j]
+
+                # if the SLT is an even multiple of 0.5, we can just use it
                 if time % 0.5 == 0:
-                    col0[entry] = time
+                    col0[j] = time
+
+                # if SLT is not an even multiple of 0.5,
                 else:
                     modifier = time - int(time)
                     if modifier > 0.5:
                         modifier -= 0.5
-                    col0[entry] = time - modifier
+                    col0[j] = time - modifier
 
         col2 = original[:, 2]
 
@@ -496,8 +499,8 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
         plt.close()
 
 
-def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
-                       lb=None, mode='show'):
+def plot_vs_date_multi(data, long, dts, title=None, data2=None,
+                       data3=None, c=None, m=None, lb=None, mode='both'):
     """
     Plots tidal values over time at a particular longitude for multiple time
     steps
@@ -541,30 +544,34 @@ def plot_vs_date_multi(data, long, dts, title=None, data2=None, c=None, m=None,
     title = '{} at {}° Longitude'.format(title, long)
     mainax.set_title(title, y=1.08)
 
-    # FIND ROWS IN ARRAY WITH MATCHING LONGITUDE -----------------------------
+    # PLOT ===============================
     for j in range(len(dts)):
+        # Find rows in array with matching longitude
         rows = np.where(data[j][:, 2] == long)[0]
         times = [data[j][i, 3] for i in rows]
         tides = [data[j][i, 6] for i in rows]
 
-        if stack:
-            tides2 = [data2[j][i, 6] for i in rows]
-
-        # PLOT -----------------------------------------------------------------
         s = len(times)  # set a limit for plotting
 
+        # Plot information from data, data2, data3 if it exists
         if stack:
             ax[j].plot(times[:s], tides[:s], color=c[0], marker=m, label=lb[0])
+            tides2 = [data2[j][i, 6] for i in rows]
             ax[j].plot(times[:s], tides2[:s], color=c[1], marker=m, label=lb[1])
+            if data3 != None:
+                tides3 = [data3[j][i, 6] for i in rows]
+                ax[j].plot(times[:s], tides3[:s], color=c[2], marker=m, label=lb[2])
             ax[j].legend(loc='lower right')
         else:
             ax[j].plot(times, tides, marker=m)
 
+        # set the subtitles of each subplot/axis
         ax[j].set_title('dt = {} minutes'.format(float(dts[j])*60))
 
     fig.tight_layout()
     plt.rcParams.update({'font.size': 16})
 
+    # Save or show the figure, or both
     fn = title
     if mode == 'show':
         plt.show()
@@ -613,41 +620,134 @@ def plot_vs_slt(data, time):
     plt.show()
 
 
-def bin_by_lunar(data, filename):
+def bin_by_lunar(data, binsize):#, filename):
     """
     Finds the mean of the solar contribution at a given solar local time.
     Writes a file of means for each pair of a unique solar local time and
     longitude.
     ---INPUT---
         data        Array of tidal data
+        binsize     Bin size in hours
         filename    Name for output file
     ---OUTPUT---
-        means       3-column array, columns: solar local time, longitude,
+        output       3-column array, columns: solar local time, longitude,
                     mean solar contribution.
     """
 
-    means = []
+    # Build array of just the llt, long and data. Rounding is to avert
+    # potential precision weirdness with python causing failures in finding
+    # data points for each longitude later.
+    col1 = np.around(data[:, 1], decimals=4)    # lunar time
+    col2 = np.around(data[:, 2], decimals=4)    # longitudes
+    d = np.column_stack((col1, col2, data[:,6]))
 
-    # FIND UNIQUE SOLAR LOCAL TIMES ------------------------------------------
-    llt = np.ndarray.tolist(data[:,1])
-    unique_llt = set([round(x,4) for x in llt])
-    print('Unique lunar local times: {}'.format(len(unique_llt)))
-    print('Length of lunar local times: {}'.format(len(data[:,1])))
+    # the +1 handles the case where only data for one longitude has been fed in
+    longitudes = range(int(min(col2)), int(max(col2))+1, 15)
+    n_lon = len(longitudes)
 
-    # ITERATE OVER LUNAR LOCAL TIMES & LONGITUDES ----------------------------
-    for val in unique_llt:
-        for lon in range(-180, 190, 15):
-            lltSlice = data[np.where(data[:,1] == val)]
-            lltSlice = lltSlice[np.where(lltSlice[:,2]==lon)]
-            if lltSlice.size != 0:
-                means.append([val, lon, np.mean(lltSlice[:,6])])
+    # number of bins: 24 hours divided by bin size in hours
+    n = int(24 / binsize)
 
-    print('Done iterating over LLT...')
+    # create an array to store the results
+    output = np.zeros([n_lon * n, 3])
+    output[:, 0] = list(np.arange(0, 24, binsize)) * n_lon
 
-    means = np.asarray(means)
+    s = 0
 
-    line0 = 'Lunar Local Time\tLongitude\tMean Lunar Tide'
-    np.savetxt('{}_llt_bin.txt'.format(filename), means, fmt='%.4f', delimiter='\t',
-               header=line0)
+    # ITERATE OVER LONGITUDES  ------------------------------------------
+    for lon in longitudes:
+        llt_sum = np.zeros([n])       # for totaling all values per SLT
+        llt_vals = np.zeros([n])      # track number of summed values
+        data_by_lon = d[np.where(d[:, 1] == lon)]  # find data at this longitude
 
-    return means
+        # Iterate over data points that we found
+        for row in data_by_lon:
+            # Identify bins
+            if binsize == 0.5:           # 30 minute bins
+                i = int(row[0] * 2)   # since indices can't be fractions
+            elif binsize == 1:           # hour bins
+                i = int(row[0])
+            if i == n:
+                i = 0
+
+            # build sum of values and array of numbers of values
+            llt_sum[i] += row[2]
+            llt_vals[i] += 1
+
+        # get the mean
+        llt_means = llt_sum / llt_vals
+
+        # append means and corresponding longitudes to the output array,
+        # then increment s by the length of the output slt_means array.
+        output[s:s + n, 1] = lon
+        output[s:s + n, 2] = llt_means
+        s += n
+
+    # line0 = 'Lunar Local Time\tLongitude\tMean Lunar Tide'
+    # np.savetxt('{}_llt_bin.txt'.format(filename), means, fmt='%.4f',
+    # delimiter='\t',
+    #            header=line0)
+    return output
+
+
+def insert_llt_avgs(original, means, binsize):
+    """
+    Build an array that is a copy of original where the actual values of
+    (total - SLT average) have been replaced with average over LLT.
+    --INPUT--
+        original    Data array where columns are solar local time,
+                    lunar local time, longitude, lunar Julian date, hour,
+                    moon phase and (total - SLT average) tide.
+        means       Array where columns are LLT, longitude, tidal average by LLT
+        binsize     Bin size information, needed to determine which data
+                    points to subtract the means from.
+    --OUTPUT--
+        result      Array holding original data for columns 0-5 and the
+                    "reconstructed" lunar tidal values in column 6
+    """
+
+    # create copy arrays
+    new = np.array(original)
+
+    # For each LLT and longitude pair, find row in original data where LLT and
+    # longitude match. Then replace the value of the tide with the average.
+    for row in means:
+        llt = row[0]
+        long = row[1]
+        avg = row[2]
+
+        orig_llt = original[:, 1]
+        if binsize == 1:                      # Assign LLTs to bins by hour
+            col1 = np.trunc(orig_llt)
+        elif binsize == 0.5:                  # Assign LLTs to bins by half hour
+
+            # Build up a list (col1) of bin end numbers. Has same length as
+            # the original LLT data and so we can use it to index later,
+            col1 = np.zeros([orig_llt.size])
+            for j in range(orig_llt.size):
+                time = orig_llt[j]
+
+                # if the LLT is an even multiple of 0.5, we can just use it
+                # as the bin end number
+                if time % 0.5 == 0:
+                    col1[j] = time
+
+                # if LLT is not an even multiple of 0.5, adjust it down to
+                # the nearest multiple of 0.5
+                else:
+                    modifier = time - int(time)
+                    if modifier > 0.5:
+                        modifier -= 0.5
+                    col1[j] = time - modifier
+
+        # this is just for readability. This is the column of longitudes.
+        col2 = original[:, 2]
+
+        # Find row indices where the binned LLT and longitude match the
+        # current value from the means array
+        i = np.where((col1 == llt) & (col2 == long))[0]
+
+        # Reassign the tidal value to be the average over LLT
+        new[i, 6] = avg
+
+    return new
