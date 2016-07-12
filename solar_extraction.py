@@ -279,7 +279,7 @@ def bin_by_solar(data, binsize):
     longitudes = range(int(min(col2)), int(max(col2))+1, 15)
     n_lon = len(longitudes)
 
-    # number of bins: 24 hours divided by bin size in hours
+    # number of bins: 24 hours divided by binsz size in hours
     n = int(24 / binsize)
     bins = list(np.arange(0, 24, binsize))
 
@@ -392,7 +392,7 @@ def chisq(obs, exp):
         chisquared = (o-e)**2 / e
         tot += chisquared
 
-    print(tot)
+    return tot
 
 
 def plot_vs_long(data, date, time, flag, title, c):
@@ -421,7 +421,7 @@ def plot_vs_long(data, date, time, flag, title, c):
     tides = data[i:f, 6]
 
     # PLOT -------------------------------------------------------------------
-    plt.figure(figsize=(10,8))
+    plt.figure(figsize=(10, 8))
     plt.plot(longs, tides, color=c, marker=r'$\bigodot$', markersize=12)
     plt.title('{}, {} at {}'.format(title, date, time))
     plt.xlabel('Longitude')
@@ -619,7 +619,7 @@ def plot_vs_slt(data, time):
     plt.show()
 
 
-def bin_by_lunar(data, binsize):  #, filename):
+def bin_by_lunar(data, binsize):
     """
     Finds the mean of the solar contribution at a given solar local time.
     Writes a file of means for each pair of a unique solar local time and
@@ -644,33 +644,41 @@ def bin_by_lunar(data, binsize):  #, filename):
     longitudes = range(int(min(col2)), int(max(col2))+1, 15)
     n_lon = len(longitudes)
 
-    # number of bins: 24 hours divided by bin size in hours
+    # number of bins: 24 hours divided by binsz size in hours
     n = int(24 / binsize)
+    bins = list(np.arange(0, 24, binsize))
 
     # create an array to store the results
     output = np.zeros([n_lon * n, 3])
-    output[:, 0] = list(np.arange(0, 24, binsize)) * n_lon
+    output[:, 0] = bins * n_lon
 
     s = 0
 
     # ITERATE OVER LONGITUDES  ------------------------------------------
     for lon in longitudes:
-        llt_sum = np.zeros([n])       # for totaling all values per SLT
-        llt_vals = np.zeros([n])      # track number of summed values
+
+        llt_sum = np.zeros([n])  # next 2 lines used to compute average
+        llt_vals = np.zeros([n])
         data_by_lon = d[np.where(d[:, 1] == lon)]  # find data at this longitude
 
-        # Iterate over data points that we found
-        for row in data_by_lon:
-            # Identify bins
-            if binsize == 0.5:           # 30 minute bins
-                i = int(row[0] * 2)   # since indices can't be fractions
-            elif binsize == 1:           # hour bins
-                i = int(row[0])
-            if i == n:
-                i = 0
+        ltimes = data_by_lon[:, 0]  # for readability
+        tides = data_by_lon[:, 2]
 
-            # build sum of values and array of numbers of values
-            llt_sum[i] += row[2]
+        k = np.where(ltimes == 24)
+        ltimes[k] = 0  # Reset all SLT = 24 to be 0 hours instead
+
+        # generate indices that match the right-side ends of bins to the
+        # appropriate (solar local) times. subtract 1 because this code needs
+        #  to use the left ends of the bins, not the right ends.
+        inds = np.digitize(ltimes, bins)
+        inds -= 1
+
+        # for each found index i, add the associated tidal value to the llt_sum
+        #  array at the ith element. (note: i iterates through inds,
+        # so it could be 0 on the 0th iteration and also 0 on the next.) then
+        #  add 1 to the ith position of the llt_vals array.
+        for i, j in zip(inds, tides):
+            llt_sum[i] += j
             llt_vals[i] += 1
 
         # get the mean
@@ -716,14 +724,14 @@ def insert_llt_avgs(original, means, binsize):
             col1 = np.trunc(orig_llt)
         elif binsize == 0.5:                  # Assign LLTs to bins by half hour
 
-            # Build up a list (col1) of bin end numbers. Has same length as
+            # Build up a list (col1) of binsz end numbers. Has same length as
             # the original LLT data and so we can use it to index later,
             col1 = np.zeros([orig_llt.size])
             for j in range(orig_llt.size):
                 time = orig_llt[j]
 
                 # if the LLT is an even multiple of 0.5, we can just use it
-                # as the bin end number
+                # as the binsz end number
                 if time % 0.5 == 0:
                     col1[j] = time
 

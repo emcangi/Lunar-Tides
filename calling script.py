@@ -83,14 +83,14 @@ for dt in dts:
     results.append(final_result)
 
 # plot_vs_date_multi(minus_sol, -120, title='Total SW2+M2 and total - SLT avg, '
-#                                       'half lunar cycle, bin=30 min',
+#                                       'half lunar cycle, binsz=30 min',
 #                    dts=dts, data2=totals, c=['blue', 'deepskyblue'],
 #                    lb=['Total - solar avg', 'Original M2'])
 
 
 
 plot_vs_date_multi(results, -120, title='Original and reconstructed M2 after '
-                                        'LLT bin, half lunar cycle, bin=1 hr',
+                                        'LLT binsz, half lunar cycle, binsz=1 hr',
                                         dts=dts, data2=totals,
                                         c=['blue', 'deepskyblue'],
                                         lb=['Reconstructed M2', 'Original M2'])
