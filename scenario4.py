@@ -3,14 +3,15 @@
 Generate tidal data, bin and average by solar local time, subtract SLT average
 from original and bin residual by lunar local time.
 
-Scenario 2:
-    Varying background tidal amplitude
-    Constant amplitude (user designated)
-    Constant phase (user designated)
+Scenario 4:
+    Constant background tidal amplitude (user designated)
+    Constant SW2 amplitude and phase (user designated)
+    Varying M2 amplitude (user designated)
+    Varying M2 phase (user designated)
 
 Output (In both cases, {} gets filled in with the time step):
-    genM2_dt={}_sc2.txt         Original generated tidal data
-    reconM2_dt={}_sc2.txt       Tidal data binned by lunar local time and
+    genM2_dt={}_sc4.txt         Original generated tidal data
+    reconM2_dt={}_sc4.txt       Tidal data binned by lunar local time and
                                 longitude
 
 Author: Eryn Cangi
@@ -28,17 +29,18 @@ recon_lunar = []              # Reconstructed lunar tides after calculations
 # You may change these variables
 dts = [0.25, 0.5, 1]          # Time steps for data generation in hours
 bin_sz = 1                    # Bin size to use when doing SLT and LLT binning
-abg = lambda o, ut, x: 2 * cos(2*o*ut + 2*x)
-a = [abg, 10, 10]             # Tidal amplitudes, format [background, sun, moon]
+am2 = lambda o, ut, x: 10*cos(2*o*ut + 2*x)
+a = [2, 10, am2]             # Tidal amplitudes, format [background, sun,
+# moon]
 start = '2016-01-01'          # Start date for data generation
 end = '2016-01-15'            # End date for data generation
-f1 = 'genM2_dt={}_sc2.txt'    # File to write generated tidal data
-f2 = 'reconM2_dt={}_sc2.txt'  # File to write reconstructed lunar tidal data
+f1 = 'genM2_dt={}_sc4.txt'    # File to write generated tidal data
+f2 = 'reconM2_dt={}_sc4.txt'  # File to write reconstructed lunar tidal data
 L = -180                      # Longitude to use for plotting results
 
 
 # Do not change the following variables
-PHI = 'C'                     # Constant phase
+PHI = 'V'                     # Constant phase
 N = [2]                       # Values of n to use in format [n1, n2...]
 S = [2]                       # Values of s to use in format [s1, s2...]
 
@@ -94,7 +96,7 @@ for dt in dts:
 # PLOT =========================================================================
 # Compares the generated M2 data with the reconstructed M2 data (which uses
 # average by LLT)
-t = 'Original and reconstructed M2, half lunar cycle, bin={} min, sc2'.format(
+t = 'Original and reconstructed M2, half lunar cycle, bin={} min, sc4'.format(
     int(60*bin_sz))
 plot_vs_date_multi(recon_lunar, L, title=t, dts=dts, data2=gen_lunar,
                    c=['blue', 'deepskyblue'], lb=['Reconstructed M2',

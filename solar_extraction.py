@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from math import pi, cos
+import warnings
 
 
 def jd_to_date(jd):
@@ -248,17 +249,16 @@ def generate_tides(startDate, endDate, amps, phase, dt=1, longIncr=15,
     return output
 
 
-def bin_by_solar(data, binsize, ts):
+def bin_by_solar(data, binsize):
     """
     Finds the mean of the solar contribution at a given solar local time.
     Returns output for each pair of a unique solar local time and longitude.
     ---INPUT---
         data          Array of tidal data
         binsize       Bin size in hours
-        ts            Timestep - for use in indexing arrays properly
     ---OUTPUT---
         output        3-column array, columns: solar local time, longitude,
-                      smean solar contribution.
+                      mean solar contribution.
     """
 
     # Build array of just the slt, long and data. Rounding is to avert
@@ -275,31 +275,38 @@ def bin_by_solar(data, binsize, ts):
 
     # number of bins: 24 hours divided by bin size in hours
     n = int(24 / binsize)
+    bins = list(np.arange(0, 24, binsize))
 
     # create an array to store the results
     output = np.zeros([n_lon * n, 3])
-    output[:, 0] = list(np.arange(0, 24, binsize)) * n_lon
+    output[:, 0] = bins * n_lon
 
     s = 0
 
     # ITERATE OVER LONGITUDES  ------------------------------------------
     for lon in longitudes:
-        slt_sum = np.zeros([n])       # for totaling all values per SLT
-        slt_vals = np.zeros([n])      # track number of summed values
+        slt_sum = np.zeros([n])       # next 2 lines used to compute average
+        slt_vals = np.zeros([n])
         data_by_lon = d[np.where(d[:, 1] == lon)]  # find data at this longitude
 
-        # Iterate over data points that we found
-        for row in data_by_lon:
-            # Identify bins
-            if binsize == 0.5:           # 30 minute bins
-                i = int(row[0] * 2)   # index can't be float => multiply by 1/ts
-            elif binsize == 1:           # hour bins
-                i = int(row[0])
-            if i == n:
-                i = 0
+        times = data_by_lon[:, 0]     # for readability
+        tides = data_by_lon[:, 2]
 
-            # build sum of values and array of numbers of values
-            slt_sum[i] += row[2]
+        k = np.where(times == 24)
+        times[k] = 0                  # Reset all SLT = 24 to be 0 hours instead
+
+        # generate indices that match the right-side ends of bins to the
+        # appropriate (solar local) times. subtract 1 because this code needs
+        #  to use the left ends of the bins, not the right ends.
+        inds = np.digitize(times, bins)
+        inds -= 1
+
+        # for each found index i, add the associated tidal value to the slt_sum
+        #  array at the ith element. (note: i iterates through inds,
+        # so it could be 0 on the 0th iteration and also 0 on the next.) then
+        #  add 1 to the ith position of the slt_vals array.
+        for i, j in zip(inds, tides):
+            slt_sum[i] += j
             slt_vals[i] += 1
 
         # get the mean
