@@ -7,11 +7,12 @@ Scenario 3:
     Constant background tidal amplitude
     Varying SW2 amplitude (user designated)
     Varying SW2 phase (user designated)
+    Constant M2 amplitude and phase (user designated)
 
 Output (In both cases, {} gets filled in with the time step):
-    genM2_dt={}_sc3.txt         Original generated tidal data
-    reconM2_dt={}_sc3.txt       Tidal data binned by lunar local time and
-                                longitude
+    genM2_dt={}_b{}_sc3.txt         Original generated tidal data
+    reconM2_dt={}_b{}_sc3.txt       Tidal data binned by lunar local time and
+                                    longitude
 
 Author: Eryn Cangi
 LASP REU, CU Boulder
@@ -19,6 +20,7 @@ LASP REU, CU Boulder
 """
 
 from solar_extraction import *
+import warnings
 
 # LISTS TO STORE ARRAYS FOR PLOTTING ===========================================
 gen_lunar = []                # Arrays of generated lunar tidal data (M2)
@@ -26,20 +28,19 @@ recon_lunar = []              # Reconstructed lunar tides after calculations
 
 # PARAMETERS & VARIABLES =======================================================
 # You may change these variables
-dts = [0.25, 0.5, 1]          # Time steps for data generation in hours
-bin_sz = 1                    # Bin size to use when doing SLT and LLT binning
-asw2 = lambda o, ut, x: 10*cos(2*o*ut + 2*x)
-a = [2, asw2, 10]             # Tidal amplitudes, format [background, sun,
-# moon]
+dts = [0.5, 1]                # Time steps for data generation in hours
+bin_sz = 0.5                    # Bin size to use when doing SLT and LLT binning
+a = [2, 10, 10]               # Tidal amplitudes, format [background, sun, moon]
+af = 'S'                      # Amplitude flag
 start = '2016-01-01'          # Start date for data generation
-end = '2016-01-15'            # End date for data generation
-f1 = 'genM2_dt={}_sc3.txt'    # File to write generated tidal data
-f2 = 'reconM2_dt={}_sc3.txt'  # File to write reconstructed lunar tidal data
+end = '2016-01-30'            # End date for data generation
+f1 = 'genM2_dt={}_b{}_sc3.txt'    # File to write generated tidal data
+f2 = 'reconM2_dt={}_b{}_sc3.txt'  # File to write reconstructed lunar tidal data
 L = -180                      # Longitude to use for plotting results
 
 
 # Do not change the following variables
-PHI = 'V'                     # Constant phase
+PHI = 'VS'                    # Constant phase
 N = [2]                       # Values of n to use in format [n1, n2...]
 S = [2]                       # Values of s to use in format [s1, s2...]
 
@@ -54,15 +55,16 @@ for dt in dts:
                       'zero.'.format(bin_sz, dt))
 
     # Generate lunar data only (for comparison)
-    dataM = generate_tides(start, end, amps=a, phase='C', dt=dt, nrange=N,
-                           srange=S, filename=f1.format(dt), component='lunar')
+    dataM = generate_tides(start, end, amps=a, ampflag=af, dt=dt, nrange=N,
+                           srange=S, filename=f1.format(dt, bin_sz),
+                           component='lunar')
 
     # Generate total data (for calculation)
-    dataT = generate_tides(start, end, amps=a, phase=PHI, dt=dt, nrange=N,
-                           srange=S, component='s+l')
+    dataT = generate_tides(start, end, amps=a, ampflag=af, phase=PHI, dt=dt,
+                           nrange=N, srange=S, component='s+l')
 
     # append a line including bin size for clarity
-    with open(f1.format(dt), 'a') as file:
+    with open(f1.format(dt, bin_sz), 'a') as file:
         file.write('\n bin size = {}\n'.format(bin_sz))
 
     # Bin generated data by solar local time
@@ -78,11 +80,11 @@ for dt in dts:
     cells = '{:<20}\t'*3
     line0 = cells.format('Lunar local time', 'Longitude',
                          'Lunar Tide (Reconstructed)')
-    np.savetxt(f2.format(dt), means_llt, fmt='%-20.4f', delimiter='\t',
+    np.savetxt(f2.format(dt, bin_sz), means_llt, fmt='%-20.4f', delimiter='\t',
                header=line0, comments='')
 
     # append a line including bin size for clarity
-    with open(f2.format(dt), 'a') as file:
+    with open(f2.format(dt, bin_sz), 'a') as file:
         file.write('\n bin size = {}\n'.format(bin_sz))
 
     # Insert lunar averages into original data structure (with dates, etc)
@@ -95,7 +97,7 @@ for dt in dts:
 # PLOT =========================================================================
 # Compares the generated M2 data with the reconstructed M2 data (which uses
 # average by LLT)
-t = 'Original and reconstructed M2, half lunar cycle, bin={} min, sc3'.format(
+t = 'Original and reconstructed M2, full lunar cycle, bin={} min, sc3'.format(
     int(60*bin_sz))
 plot_vs_date_multi(recon_lunar, L, title=t, dts=dts, data2=gen_lunar,
                    c=['blue', 'deepskyblue'], lb=['Reconstructed M2',
