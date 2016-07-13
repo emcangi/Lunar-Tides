@@ -21,6 +21,7 @@ LASP REU, CU Boulder
 from solar_extraction import *
 import warnings
 from scipy.stats import chisquare
+from scipy.optimize import curve_fit
 
 
 # =========================== PARAMETERS & VARIABLES ===========================
@@ -102,16 +103,45 @@ for end, cyc in zip(ends, cycle):
             # fmt='%-20.4f', delimiter='\t', header=line0, comments='')
 
             # Write the results of lunar binning original M2 to a file
-            np.savetxt(f3.format(cyc, dt, binsz), orig_M2_llt_bin,
-                       fmt='%-20.4f',
-                       delimiter='\t', header=line0, comments='')
+            # np.savetxt(f3.format(cyc, dt, binsz), orig_M2_llt_bin,
+            #            fmt='%-20.4f',
+            #            delimiter='\t', header=line0, comments='')
 
             # χ² ANALYSIS ------------------------------------------------------
 
-            # calculate χ²
+            # calculate χ² for reconstructed vs. original data across all
+            # longitudes
             obs = recon_M2_llt_bin[:, 2]
             exp = orig_M2_llt_bin[:, 2]
+            n = len(obs)
             chi, p = chisquare(obs, exp)
+
+            # SCIPY CURVE_FIT --------------------------------------------------
+            # Fitting function
+            def lunartide(llt, A, P):
+                """
+                Simple fitting function for the lunar tide.
+                ---INPUT---
+                :param llt: lunar local time (independent variable)
+                :param A: amplitude
+                :param P: phase
+                :return: array of values
+                """
+                n = 2
+                s = 2
+                global L
+                return A * np.cos((2 * pi * n / 24) * llt - (n + s) * L + P)
+
+            # Grab data
+
+            time = orig_M2_llt_bin[:]
+            recon_M2_llt_bin
+            # Initial guess.
+            p0 = np.array([10, 0.01])
+            L = -180                      # set longitude - should be a loop
+
+            popt, pcov = curve_fit(lunartide, orig180[:, 0], orig180[:, 2], p0,
+                                   bounds=([9, 0], [11, 2 * pi]))
 
             # WRITE RESULTS ----------------------------------------------------
 
@@ -123,6 +153,8 @@ for end, cyc in zip(ends, cycle):
                 f.write('Timestep: {} hr\n'.format(dt))
                 f.write('Bin size: {}\n'.format(binsz))
                 f.write('χ² test: χ² = {}, p = {}\n'.format(chi, p))
+                f.write('n = {}'.format(n))
+                f.write('χ² ≤ n: {}'.format(chi <= n))
                 f.write('\n')
             f.close()
 

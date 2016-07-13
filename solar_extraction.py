@@ -219,8 +219,7 @@ def generate_tides(start_date, end_date, amps, ampflag=None, phase=None, dt=1,
             if phase == 'VM':
                 phi_l = cos(t + pi / 2)
 
-            # Set summation storage variable tide equal to background to
-            # start with
+            # Tidal sum includes non-solar and non-lunar background
             tide = AB
 
             # Actual summation of the tides ------------------------------------
