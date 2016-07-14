@@ -1,17 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-Generate tidal data, binsz and average by solar local time, subtract SLT average
-from original and binsz residual by lunar local time.
+Generate tidal data, bin and average by solar local time, subtract SLT average
+from original and bin residual by lunar local time.
 
 Scenario 2:
     Varying background tidal amplitude
     Constant amplitude (user designated)
     Constant phase (user designated)
 
-Output (In both cases, {} gets filled in with the time step or binsz size):
-    genM2_dt={}_b{}_sc2.txt         Original generated tidal data
-    reconM2_dt={}_b{}_sc2.txt       Tidal data binned by lunar local time and
-                                    longitude
+Output (In both cases, {} gets filled in with the fraction of cycle, timestep or
+ bin size):
+    genM2_{}_dt={}_b{}_sc2.txt         Original generated tidal data
+    reconM2_{}_dt={}_b{}_sc2.txt       Tidal data binned by lunar local time and
+                                       longitude
+    origM2_{}_dt={}_b{}_sc2.txt        Original tidal data, binned by lunar
+                                       local time, with extraneous columns such
+                                       as date, SLT, moon phase removed
+    scenario2_results.txt              Summarizes each simulation run with
+                                       percentage of lunar cycle, bin size, step
+                                       size, χ² test on all data and
+                                       reconstructed amplitudes and phase
 
 Author: Eryn Cangi
 LASP REU, CU Boulder
@@ -19,7 +27,6 @@ LASP REU, CU Boulder
 """
 
 from solar_extraction import *
-import warnings
 from scipy.stats import chisquare
 
 # =========================== PARAMETERS & VARIABLES ===========================
@@ -32,16 +39,16 @@ ends = ['2016-01-15',                 # End date for data generation
         '2016-01-30']
 f1 = 'genM2_{}_dt={}_b{}_sc2.txt'     # File to write generated tidal data
 f2 = 'reconM2_{}_dt={}_b{}_sc2.txt'   # File to write reconstructed tidal data
-f3 = 'origM2_{}_dt={}_b{}_sc2.txt'    # File to write original M2 data after binsz
+f3 = 'origM2_{}_dt={}_b{}_sc2.txt'    # File to write original M2 data after bin
 f4 = 'scenario2_results.txt'          # Prints results of χ² test, etc
-L = -120                              # Longitude to use for plotting results
+# L = -120                              # Longitude to use for plotting results
 cycle = ['Half', '75%', 'Full']       # Simulation length, units of lunar cycle
 
 # Strongly suggested not to change these variables
 DTS = [0.5, 1]                # Time steps for data generation in hours
 BINS = [0.5, 1]             # Bin size to use when doing SLT and LLT binning
 PHI = 'C'                     # Constant phase
-N = [2]                       # Values of n to use in format [n1, n2...]
+N = [2]                       # Values of v to use in format [n1, n2...]
 S = [2]                       # Values of s to use in format [s1, s2...]
 GEN_LUNAR = []                # Arrays of generated lunar tidal data (M2)
 RECON_LUNAR = []              # Reconstructed lunar tides after calculations
@@ -66,14 +73,7 @@ for end, cyc in zip(ends, cycle):
         for binsz in BINS:
             # GENERATE DATA ----------------------------------------------------
             if binsz < dt:
-                warnings.warn('Warning! Bin size {} < time step {}. This will '
-                              'not cause problems with plotting but will cause '
-                              'problems with analysis and fitting because some '
-                              'entries in either the SLT average or LLT '
-                              'average will be zero.'.format(binsz, dt))
-                flag = True
-            else:
-                flag = False
+                continue
 
             # Generate lunar data only (for comparison)
             dataM = generate_tides(start, end, amps=a, ampflag=af, phase=PHI,
@@ -104,28 +104,50 @@ for end, cyc in zip(ends, cycle):
             #             delimiter='\t', header=line0, comments='')
 
             # Write the results of lunar binning original M2 to a file
-            np.savetxt(f3.format(cyc, dt, binsz), orig_M2_llt_bin, fmt='%-20.4f',
-                       delimiter='\t', header=line0, comments='')
+            # np.savetxt(f3.format(cyc, dt, binsz), orig_M2_llt_bin, fmt='%-20.4f',
+            #            delimiter='\t', header=line0, comments='')
 
             # χ² ANALYSIS ------------------------------------------------------
 
-            # calculate χ²
+            # uses all data across all longitudes
             obs = recon_M2_llt_bin[:, 2]
             exp = orig_M2_llt_bin[:, 2]
+            v = len(obs)
             chi, p = chisquare(obs, exp)
+
+            # SCIPY CURVE_FIT --------------------------------------------------
+            guess = [a[2], 0]  # Initial parameter guess
+            al = [9, 11]  # Amplitude bounds
+            pl = [0, 2 * pi]  # Phase bounds
+            ap = amp_and_phase(recon_M2_llt_bin, guess, al, pl, 2)
+
+            # Find some averages
+            avg = np.mean(ap, axis=0)
+            avg_amp = avg[1]
+            avg_phase = avg[2]
+            error_amp = round((abs(avg_amp - a[2]) / a[2]) * 100, 2)
+            diff_phase = round(avg_phase - 0, 6)
 
             # WRITE RESULTS ----------------------------------------------------
 
             with open(f4, 'a') as f:
-                if flag:
-                    f.write('WARNING! binsz size is smaller than timestep. '
-                            'Analysis may be compromised.\n')
                 f.write('{} lunar cycle\n'.format(cyc))
                 f.write('Timestep: {} hr\n'.format(dt))
-                f.write('Bin size: {}\n'.format(binsz))
-                f.write('χ² test: χ² = {}, p = {}\n'.format(chi, p))
+                f.write('Bin size: {} hr\n'.format(binsz))
+                f.write('χ² = {}, p = {} (all longitudes)\n'.format(chi, p))
+                f.write('number of data points, v = {}\n'.format(v))
+                f.write('χ² ≤ v: {}\n'.format(chi <= v))
+                f.write('Amplitudes and phases\n')
+                f.write('Average reconstructed lunar amplitude across '
+                        'longitudes: {}\n'.format(round(avg_amp, 2)))
+                f.write('M2 amplitude percent error: {}%\n'.format(error_amp))
+                f.write('Average reconstructed lunar phase across longitudes: {'
+                        '}\n'.format(round(avg_phase, 2)))
+                f.write('M2 phase difference from original (0): {}\n'.format(
+                    diff_phase))
                 f.write('\n')
             f.close()
+
 
             # EXTRA STUFF FOR PLOTTING BY DATE ---------------------------------
 
@@ -138,8 +160,8 @@ for end, cyc in zip(ends, cycle):
             # recon_lunar.append(reconM_full_table)
 
 # ========================= DISPLAY RESULTS IN CONSOLE =========================
-with open(f4, 'r') as f:
-    print(f.read())
+# with open(f4, 'r') as f:
+#     print(f.read())
 
 # =================================== PLOT =====================================
 # Compares the generated M2 data with the reconstructed M2 data (which uses
