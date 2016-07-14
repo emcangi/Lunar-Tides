@@ -22,7 +22,9 @@ def amp_and_phase(recondata, pguess, amp_lim, phs_lim, n):
     """
     from scipy.optimize import curve_fit
 
-    lunar_func = lambda llt, A, P: A * np.cos((2 * pi * n / 24) * llt - P)
+    # Function that gets fit
+    lunar_func = lambda llt, A, P: A * np.cos((2 * pi * n / 24) * llt +(
+        n+s)*L - P)
 
     results = []
 
@@ -339,7 +341,9 @@ def generate_tides(start_date, end_date, amps, ampflag=None, phase=None, dt=1,
             # CALCULATE THE TIDES ----------------------------------------------
 
             # Handle amplitude variation ---------------------------------------
-            if ampflag == 'B':             # Vary the background tide amplitude
+            # Vary the background tide amplitude: period of ~5 days,
+            # per literature
+            if ampflag == 'B':
                 AB = B * cos((2*pi/5)*t)
             else:
                 AB = B

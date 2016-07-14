@@ -151,20 +151,27 @@ for end, cyc in zip(ends, cycle):
             orig_L = orig_M2_llt_bin[np.where(orig_M2_llt_bin[:, 1] == L)]
             recon_L = recon_M2_llt_bin[np.where(recon_M2_llt_bin[:, 1] == L)]
 
+            # Generate data to plot the fit line
+            this_lon = ap[np.where(ap[:, 0] == L)][0]
+            fit = this_lon[1] * np.cos((2*pi*N[0] / 24) * recon_L[:,0] -
+                                       this_lon[2])
+
             plt.figure(figsize=(10,8))
             plt.plot(orig_L[:, 0], orig_L[:, 2], color='deepskyblue',
-                     marker='o', label='Original')
+                     marker='o', markersize=8, label='Original')
             plt.plot(recon_L[:, 0], recon_L[:, 2], color='blue',
-                     marker='x', label='Reconstructed')
+                     marker='x', markersize=10, label='Reconstructed')
+            plt.plot(recon_L[:, 0], fit, color='red', label='Fit line')
             title = 'M2 vs LLT, {}° longitude, {} cycle, dt={} hr, ' \
-                    'b={} hr.png'.format(L, cyc, dt, binsz)
+                    'b={} hr'.format(L, cyc, dt, binsz)
             plt.title(title)
             plt.xlabel('Lunar local time (hours)')
             plt.ylabel('Tidal amplitude')
             plt.legend(loc='lower right')
             plt.rcParams.update({'font.size': 16})
             plt.tight_layout()
-            plt.savefig(title, bbox_inches='tight')
+            fn = title + '.png'
+            plt.savefig(fn, bbox_inches='tight')
 
             # EXTRA STUFF FOR PLOTTING BY DATE ---------------------------------
 
