@@ -4,7 +4,7 @@ Generate tidal data, bin and average by solar local time, subtract SLT average
 from original and bin residual by lunar local time.
 
 Scenario 2:
-    Varying background tidal amplitude
+    Constant background tidal amplitude
     Constant amplitude (user designated)
     Constant phase (user designated)
 
@@ -32,7 +32,6 @@ from scipy.stats import chisquare
 # =========================== PARAMETERS & VARIABLES ===========================
 # You may change these variables
 a = [2, 10, 10]                       # Amplitudes: [background, sun, moon]
-af = 'B'                              # Amplitude flag
 start = '2016-01-01'                  # Start date for data generation
 ends = ['2016-01-15',                 # End date for data generation
         '2016-01-23',
@@ -46,8 +45,7 @@ cycle = ['Half', '75%', 'Full']       # Simulation length, units of lunar cycle
 
 # Strongly suggested not to change these variables
 DTS = [0.5, 1]                # Time steps for data generation in hours
-BINS = [0.5, 1]             # Bin size to use when doing SLT and LLT binning
-PHI = 'C'                     # Constant phase
+BINS = [0.5, 1]               # Bin size to use when doing SLT and LLT binning
 N = [2]                       # Values of v to use in format [n1, n2...]
 S = [2]                       # Values of s to use in format [s1, s2...]
 GEN_LUNAR = []                # Arrays of generated lunar tidal data (M2)
@@ -76,12 +74,12 @@ for end, cyc in zip(ends, cycle):
                 continue
 
             # Generate lunar data only (for comparison)
-            dataM = generate_tides(start, end, amps=a, ampflag=af, phase=PHI,
-                                   dt=dt, nrange=N, srange=S, component='lunar')
+            dataM = generate_tides(start, end, amps=a, dt=dt, nrange=N,
+                                   srange=S, component='lunar')
 
             # Generate total data (for calculation)
-            dataT = generate_tides(start, end, amps=a, ampflag=af, phase=PHI,
-                                   dt=dt, nrange=N, srange=S, component='s+l')
+            dataT = generate_tides(start, end, amps=a, dt=dt, nrange=N,
+                                   srange=S, component='s+l')
 
             # Bin generated data by solar local time
             means_slt = bin_by_solar(dataT, binsz)
@@ -117,9 +115,8 @@ for end, cyc in zip(ends, cycle):
 
             # SCIPY CURVE_FIT --------------------------------------------------
             guess = [a[2], 0]  # Initial parameter guess
-            al = [9, 11]  # Amplitude bounds
-            pl = [0, 2 * pi]  # Phase bounds
-            ap = amp_and_phase(recon_M2_llt_bin, guess, al, pl, 2)
+            bounds = [[9, 0], [11, 2 * pi]]  # [[low A, low φ], [hi A, hi φ]]
+            ap = amp_and_phase(recon_M2_llt_bin, guess, bounds, N[0], S[0])
 
             # Find some averages
             avg = np.mean(ap, axis=0)
@@ -155,8 +152,8 @@ for end, cyc in zip(ends, cycle):
 
             # Generate data to plot the fit line
             this_lon = ap[np.where(ap[:, 0] == L)][0]
-            fit = this_lon[1] * np.cos((2*pi*N[0] / 24) * recon_L[:,0] -
-                                       this_lon[2])
+            fit = this_lon[1] * np.cos((2*pi*N[0] / 24) * recon_L[:, 0] +
+                                       (S[0] - N[0]) * L - this_lon[2])
 
             plt.figure(figsize=(10,8))
             plt.plot(orig_L[:, 0], orig_L[:, 2], color='deepskyblue',

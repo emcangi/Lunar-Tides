@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from math import pi, cos
 
 
-def amp_and_phase(recondata, pguess, amp_lim, phs_lim, n):
+def amp_and_phase(recondata, pguess, bounds, n, s):
     """
     Fits the lunar equation based on lunar local time for each longitudeto
     the reconstructed data in order to extract its amplitude and phase for
@@ -14,33 +14,25 @@ def amp_and_phase(recondata, pguess, amp_lim, phs_lim, n):
     :param recondata: Reconstructed lunar tide data binned by LLT, format [[
                       llt, longitude, tide]_0 ...]
     :param pguess: Initial guess for parameters in format [amplitude, phase]
-    :param amp_lim: Lower and upper bounds for amplitude in format [low, high]
-    :param phs_lim: Lower and upper bounds for phase in format [low, high]
-    :param n: Frequency of the tidal wave. 2 for semidiurnal.
-    :return: list of strings stating the fitted amplitude and phase per
+    :param bounds: Bounds for amplitude in format [[low A, low φ], [high A,
+                                                                    high φ]]
+    :param s: Spatial frequency of the tidal wave.
+    :param n: Temporal frequency of the tidal wave. 2 for semidiurnal.
+    :return: list of lists stating the fitted amplitude and phase per
              longitude
     """
     from scipy.optimize import curve_fit
 
-    # Function that gets fit
-    lunar_func = lambda llt, A, P: A * np.cos((2 * pi * n / 24) * llt +(
-        n+s)*L - P)
+    # Function that gets fit - nested to allow additional arguments
+    def fit_lunar(n, s, L):
+        def real_fitter(llt, A, P):
+            return A * np.cos((2 * pi * n / 24) * llt + (s - n) * L - P)
+        return real_fitter
 
-    results = []
+    popt, pcov = curve_fit(fit_lunar(n, s, recondata[:,1]), recondata[:,0],
+                           recondata[:,2], pguess, bounds=bounds)
 
-    for lon in range(-180, 180, 15):
-        # Extract only data for current longitude
-        r = recondata[np.where(recondata[:, 1] == lon)]
-        times = r[:, 0]
-        tides = r[:, 2]
-
-        # Set the blind random search boundaries
-        lims = ([amp_lim[0], phs_lim[0]], [amp_lim[1], phs_lim[1]])
-
-        popt, pcov = curve_fit(lunar_func, times, tides, pguess, bounds=lims)
-        results.append([lon, popt[0], popt[1]])
-
-    return np.asarray(results)
+    return [popt[0], popt[1]]#np.asarray(results)
 
 
 def bin_by_solar(data, binsize):
@@ -307,7 +299,7 @@ def generate_tides(start_date, end_date, amps, ampflag=None, phase=None, dt=1,
 
     # MAKE OUTPUT ARRAY --------------------------------------------------------
     rows = numLongs * (n_hours / dt)
-    output = np.empty([rows,7])
+    output = np.empty([rows, 7])
     r = 0
 
     # LOOP THROUGH TIMESTEPS ===================================================
