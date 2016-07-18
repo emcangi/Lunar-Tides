@@ -1,25 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Generate tidal data, bin and average by solar local time, subtract SLT average
-from original and bin residual by lunar local time.
-
-Scenario 1:
-    No background tidal amplitudes
-    Constant amplitude (user designated)
-    Constant phase (zero)
-
-Output (In both cases, {} gets filled in with the fraction of cycle, timestep or
- bin size):
-    genM2_{}_dt={}_b{}_sc1.txt         Original generated tidal data
-    reconM2_{}_dt={}_b{}_sc1.txt       Tidal data binned by lunar local time and
-                                       longitude
-    origM2_{}_dt={}_b{}_sc1.txt        Original tidal data, binned by lunar
-                                       local time, with extraneous columns such
-                                       as date, SLT, moon phase removed
-    scenario1_results.txt              Summarizes each simulation run with
-                                       percentage of lunar cycle, bin size, step
-                                       size, χ² test on all data and
-                                       reconstructed amplitudes and phase
+ANALYZE TIME-GCM DATA
 
 Author: Eryn Cangi
 LASP REU, CU Boulder
@@ -28,6 +9,16 @@ LASP REU, CU Boulder
 
 from lunar_tide_extraction import *
 from scipy.stats import chisquare
+
+fname = 'Analysis/TIME-GCM/TUVZ_allLev_timegcm_wg5_zmPlev05_GPI_lunarM2_tmp4.nc'
+
+timegcm_data = wrangle_timegcm_data(fname, 20, 'TN')
+
+
+### FIX EVERYTHING BELOW HERE !!!!! ----------------------#####################
+
+
+
 
 # =========================== PARAMETERS & VARIABLES ===========================
 # You may change these variables
@@ -72,13 +63,6 @@ for end, cyc in zip(ends, cycle):
             if binsz < dt:
                 continue
 
-            # Generate lunar data only (for comparison)
-            dataM = generate_tides(start, end, amps=a, dt=dt, nrange=N,
-                                   srange=S, component='lunar')
-
-            # Generate total data (for calculation)
-            dataT = generate_tides(start, end, amps=a, dt=dt, nrange=N,
-                                   srange=S, component='s+l')
 
             # Bin generated data by solar local time
             means_slt = bin_by_solar(dataT, binsz)
@@ -164,24 +148,3 @@ for end, cyc in zip(ends, cycle):
             plt.tight_layout()
             fn = title + '.png'
             plt.savefig(fn, bbox_inches='tight')
-
-            # EXTRA STUFF FOR PLOTTING BY DATE ---------------------------------
-
-            # # Insert LLT averages into original table (with dates, etc)
-            # reconM_full_table = insert_llt_avgs(nosol, recon_M2_llt_bin,
-            #                                     binsz)
-            #
-            # # build lists of result arrays to use for plotting
-            # gen_lunar.append(dataM)
-            # recon_lunar.append(reconM_full_table)
-
-
-# =================================== PLOT =====================================
-# Compares the generated M2 data with the reconstructed M2 data (which uses
-# average by LLT)
-
-# t = 'Original and reconstructed M2, full lunar cycle, binsz={} min, sc1'.format(
-#     int(binsz * 60))
-# plot_vs_date_multi(recon_lunar, L, title=t, dts=dts, data2=gen_lunar,
-#                    c=['blue', 'deepskyblue'], lb=['Reconstructed M2',
-#                                                   'Original M2'], mode='show')

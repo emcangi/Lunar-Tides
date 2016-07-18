@@ -13,7 +13,8 @@ def amp_and_phase(recondata, pguess, bounds, n, s):
 
     :param recondata: Reconstructed lunar tide data binned by LLT, format [[
                       llt, longitude, tide]_0 ...]
-    :param pguess: Initial guess for parameters in format [amplitude, phase]
+    :param pguess: Initial guess for parameters in format [amplitude, phase,
+                    background]
     :param bounds: Bounds for amplitude in format [[low A, low φ], [high A,
                                                                     high φ]]
     :param s: Spatial frequency of the tidal wave.
@@ -29,10 +30,10 @@ def amp_and_phase(recondata, pguess, bounds, n, s):
             return A * np.cos((2 * pi * n / 24) * llt + (s - n) * L - P)
         return real_fitter
 
-    popt, pcov = curve_fit(fit_lunar(n, s, recondata[:,1]), recondata[:,0],
-                           recondata[:,2], pguess, bounds=bounds)
+    popt, pcov = curve_fit(fit_lunar(n, s, recondata[:, 1]), recondata[:, 0],
+                           recondata[:, 2], pguess, bounds=bounds)
 
-    return [popt[0], popt[1]]#np.asarray(results)
+    return [popt[0], popt[1]]
 
 
 def bin_by_solar(data, binsize):
@@ -197,9 +198,12 @@ def chisq(obs, exp):
 
 def date_to_jd(date, time):
     """
-    Converts Gregorian date to Julian date given the format:
-    date = YYYY-MM-DD, time = HH:MM:SS
+    Converts Gregorian date to Julian date given two strings of date and time.
     From Astronomical Algorithms, Jean Meeus, 1991.
+
+    :param date: Gregorian date in format 'YYYY-MM-DD'
+    :param time: Universal time in format 'HH:MM:SS'
+    :return: integer-valued Julian date
     """
     x = time.split(':')
     x = [int(xi) for xi in x]
@@ -733,6 +737,34 @@ def plot_vs_slt(data, time):
     plt.show()
 
 
+def plot_vs_llt(o, r, obg, lon, coeffs, s, n, cyc, dt, binsz):
+
+    # Generate data to plot the fit line
+    fit = coeffs[0] * np.cos((2 * pi * n/ 24) * r[:, 0] +
+                             (s - n) * lon - coeffs[1])
+
+    plt.figure(figsize=(10, 8))
+    plt.plot(o[:, 0], o[:, 2], color='sage',
+             marker='o', markersize=8, label='Original M2 + background')
+    plt.plot(o[:, 0], obg[:, 2], color='deepskyblue',
+             marker='d', markersize=8, label='Original M2')
+
+    plt.plot(r[:, 0], r[:, 2], color='blue',
+             marker='x', markersize=10, label='Reconstructed M2')
+    plt.plot(r[:, 0], fit, color='red', label='Fit line')
+    title = 'M2 vs LLT, {}° longitude, {} cycle, dt={} hr, ' \
+            'b={} hr'.format(lon, cyc, dt, binsz)
+    plt.title(title)
+    plt.xlabel('Lunar local time (hours)')
+    plt.ylabel('Tidal amplitude')
+    plt.legend(loc='lower right')
+    plt.rcParams.update({'font.size': 16})
+    plt.tight_layout()
+    fn = title + '.png'
+    plt.savefig(fn, bbox_inches='tight')
+    #plt.show()
+
+
 def remove_solar(original, means, binsize):
     """
     Subtract off the solar tidal averages. Iterates through the file holding
@@ -786,4 +818,143 @@ def remove_solar(original, means, binsize):
 
     return diff
 
+
+def take_closest(myList, myNumber):
+    """
+    Assumes myList is sorted. Returns closest value to myNumber.
+
+    If two numbers are equally close, return the smallest number.
+    From http://stackoverflow.com/a/12141511
+    """
+    from bisect import bisect_left
+
+    pos = bisect_left(myList, myNumber)
+    if pos == 0:
+        return myList[0]
+    if pos == len(myList):
+        return myList[-1]
+    before = myList[pos - 1]
+    after = myList[pos]
+    if after - myNumber < myNumber - before:
+       return after
+    else:
+       return before
+
+
+def wrangle_timegcm_data(fname, lat, var):
+    """
+    Takes a netCDF file of TIME-GCM data and outputs an array of the data in
+    the format required by the solar_extraction library for lunar tidal
+    extraction.
+
+    :param fname: Name of a netCDF file containing time-gcm data.
+    :param lat: Latitude at which to examine data.
+    :param var: Variable name of data to take from file.
+    :return: Completed array of tidal data in format required by
+    solar_extraction.
+    """
+
+    from netCDF4 import Dataset
+
+    # Set the filename to read from and import file data
+    fh = Dataset(fname, mode='r')
+
+    # EXTRACT USEFUL VARIABLES =================================================
+    lons = fh.variables['lon'][:]
+    lons_rad = (pi / 180) * np.copy(lons)
+    lats = fh.variables['lat'][:]
+    times = fh.variables['mtime'][:]
+    Tdata = fh.variables[var][:]
+
+    # PARAMETERS ===============================================================
+    datapoints = Tdata.shape[0]
+    numLong = lons.shape[0]
+    # find nearest latitude toward request and then find its index
+    nearest_lat = take_closest(lats, lat)
+    lat_index = lats.index(nearest_lat)
+
+    # TIDAL DATA FOR REQUESTED LATITUDE ========================================
+    # Each column corresponds with a longitude and each row corresponds with a
+    #  time entry.
+    neat_data = np.zeros([Tdata.shape[0], lons.shape[0]])
+
+    # Extract only data for requested latitude and place in neat_data
+    for i in range(0, Tdata.shape[0]):
+        neat_data[i, :] = Tdata[i][0, lat_index, :]
+
+    # CREATE OUTPUT ARRAY ======================================================
+    n = datapoints * numLong                    # number of rows for final array
+    output = np.zeros([n, 7])
+
+
+    # POPULATE OUTPUT ARRAY ====================================================
+
+    start = 0       # row index of output at which to paste the sub array.
+    for i in range(0, datapoints):
+        # for every time entry we have a day, an hour and some tidal values by
+        # longitude. We will iterate through time entries and build a "sub
+        # array" for just that time entry, then paste the subarray into the
+        # output array at the right location.
+
+        subarray = np.zeros([numLong, 7])
+
+        # Format time and do time calculations ---------------------------------
+        day = times[i, 0]
+        hrUT = times[i, 1]
+
+        # Set up the date string to use JD converter
+        if 1 <= day <= 31:
+            date = '2013-01-{:>02}'.format(day)
+        else:
+            date = '2013-02-{:>02}'.format(day - 31)
+        time = '{:>02}:00:00'.format(hrUT)
+
+        # get Julian date
+        jdate = date_to_jd(date, time)
+
+        # Calculate SLT
+        slt = []
+        for L in lons_rad:
+            s = hrUT + L / (2 * pi / 24)
+            if s < 0:
+                s += 24
+            elif s >= 24:
+                s -= 24
+            else:
+                pass
+            slt.append(s)
+
+        # find moon phase
+        nuHr = get_moon_phase(jdate)
+
+        # Calculate lunar local time
+        llt = np.asarray(slt) - nuHr
+        for j in range(len(llt)):
+            if llt[j] < 0:
+                llt[j] += 24
+
+        # Assign values to subarray --------------------------------------------
+        subarray[:, 0] = slt
+        subarray[:, 1] = llt
+        subarray[:, 2] = list(lons)
+        subarray[:, 3] = jdate
+        subarray[:, 4] = hrUT
+        subarray[:, 5] = nuHr
+        subarray[:, 6] = neat_data[i]
+
+        # Add subarray to the big array ----------------------------------------
+        output[start:start + numLong, :] = subarray
+
+        # moves up the pasting index to the next line of 0s in timegcm_array
+        start += numLong
+
+        # cells = '{:<20}\t'*7
+        # line0 = cells.format('Solar local time', 'Lunar local time',
+        #                      'Longitude', 'Julian Date', 'UT',
+        #                      'Moon phase (hrs)', 'Tide')
+        #
+        # np.savetxt('timegcm_data_cleanedup.txt', output, fmt='%-20.4f',
+        #            delimiter='\t', header=line0, comments='')
+
+    return output
 

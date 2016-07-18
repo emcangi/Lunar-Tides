@@ -26,7 +26,7 @@ LASP REU, CU Boulder
 13 June - 29 July, 2016
 """
 
-from solar_extraction import *
+from lunar_tide_extraction import *
 from scipy.stats import chisquare
 
 # =========================== PARAMETERS & VARIABLES ===========================
@@ -114,16 +114,11 @@ for end, cyc in zip(ends, cycle):
             chi, p = chisquare(obs, exp)
 
             # SCIPY CURVE_FIT --------------------------------------------------
-            guess = [a[2], 0]  # Initial parameter guess
-            bounds = [[9, 0], [11, 2 * pi]]  # [[low A, low φ], [hi A, hi φ]]
+            guess = [a[2], 0]                          # Initial parameter guess
+            bounds = [[9, -pi/16], [11, pi/16]]
             ap = amp_and_phase(recon_M2_llt_bin, guess, bounds, N[0], S[0])
-
-            # Find some averages
-            avg = np.mean(ap, axis=0)
-            avg_amp = avg[1]
-            avg_phase = avg[2]
-            error_amp = round((abs(avg_amp - a[2]) / a[2]) * 100, 2)
-            diff_phase = round(avg_phase - 0, 6)
+            error_amp = round((abs(ap[0] - a[2]) / a[2]) * 100, 2)
+            diff_phase = round(ap[1] - 0, 6)
 
             # WRITE RESULTS ----------------------------------------------------
 
@@ -136,10 +131,10 @@ for end, cyc in zip(ends, cycle):
                 f.write('χ² ≤ v: {}\n'.format(chi <= v))
                 f.write('Amplitudes and phases\n')
                 f.write('Average reconstructed lunar amplitude across '
-                        'longitudes: {}\n'.format(round(avg_amp, 2)))
+                        'longitudes: {}\n'.format(round(ap[0], 2)))
                 f.write('M2 amplitude percent error: {}%\n'.format(error_amp))
                 f.write('Average reconstructed lunar phase across longitudes: {'
-                        '}\n'.format(round(avg_phase, 2)))
+                        '}\n'.format(round(ap[1], 2)))
                 f.write('M2 phase difference from original (0): {}\n'.format(
                     diff_phase))
                 f.write('\n')
@@ -150,27 +145,11 @@ for end, cyc in zip(ends, cycle):
             orig_L = orig_M2_llt_bin[np.where(orig_M2_llt_bin[:, 1] == L)]
             recon_L = recon_M2_llt_bin[np.where(recon_M2_llt_bin[:, 1] == L)]
 
-            # Generate data to plot the fit line
-            this_lon = ap[np.where(ap[:, 0] == L)][0]
-            fit = this_lon[1] * np.cos((2*pi*N[0] / 24) * recon_L[:, 0] +
-                                       (S[0] - N[0]) * L - this_lon[2])
+            orig_minus_bg = np.copy(orig_L)
+            orig_minus_bg[:, 2] = orig_minus_bg[:, 2] - a[0]
 
-            plt.figure(figsize=(10,8))
-            plt.plot(orig_L[:, 0], orig_L[:, 2], color='deepskyblue',
-                     marker='o', markersize=8, label='Original')
-            plt.plot(recon_L[:, 0], recon_L[:, 2], color='blue',
-                     marker='x', markersize=10, label='Reconstructed')
-            plt.plot(recon_L[:, 0], fit, color='red', label='Fit line')
-            title = 'M2 vs LLT, {}° longitude, {} cycle, dt={} hr, ' \
-                    'b={} hr'.format(L, cyc, dt, binsz)
-            plt.title(title)
-            plt.xlabel('Lunar local time (hours)')
-            plt.ylabel('Tidal amplitude')
-            plt.legend(loc='lower right')
-            plt.rcParams.update({'font.size': 16})
-            plt.tight_layout()
-            fn = title + '.png'
-            plt.savefig(fn, bbox_inches='tight')
+            plot_vs_llt(orig_L, orig_minus_bg, recon_L, L, ap, S[0], N[0], cyc,
+                        dt, binsz)
 
 
             # EXTRA STUFF FOR PLOTTING BY DATE ---------------------------------
@@ -182,10 +161,6 @@ for end, cyc in zip(ends, cycle):
             # # build lists of result arrays to use for plotting
             # gen_lunar.append(dataM)
             # recon_lunar.append(reconM_full_table)
-
-# ========================= DISPLAY RESULTS IN CONSOLE =========================
-# with open(f4, 'r') as f:
-#     print(f.read())
 
 # =================================== PLOT =====================================
 # Compares the generated M2 data with the reconstructed M2 data (which uses
