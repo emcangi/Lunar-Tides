@@ -364,7 +364,7 @@ def format_timegcm_data(fname, lat, var):
     # np.savetxt('timegcm_data.txt', output, fmt='%-20.4f',
     #            delimiter='\t', header=line0, comments='')
 
-    return output
+    return output, nearest_lat
 
 
 def generate_tides(start_date, end_date, amps, ampflag=None, phase=None, dt=1,
@@ -500,11 +500,10 @@ def generate_tides(start_date, end_date, amps, ampflag=None, phase=None, dt=1,
                         tide += AS * cos((W*n)*t + s*L - phi_s) \
                               + AM * cos((W*n)*(t-nuHr) + s*L - phi_l)
                     elif component == 's+l+pw':
-                        print('triggered')
                         AP = 14                    # From Astrid
                         tide += AS * cos((W * n) * t + s*L - phi_s) \
                               + AM * cos((W * n) * (t-nuHr) + s*L - phi_l) \
-                              + AP * cos((2 * pi / 16) * t + L)
+                              + AP * cos((2 * pi / 384) * t + L)
 
             output[r, 0] = slt
             output[r, 1] = llt
