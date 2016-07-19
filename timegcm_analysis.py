@@ -104,3 +104,4 @@ for dur, cyc in zip(duration, cycle):
     fn = title + '.png'
     plt.savefig(fn, bbox_inches='tight')
     #plt.show()
+
