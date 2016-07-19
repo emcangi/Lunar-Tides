@@ -31,7 +31,7 @@ from scipy.stats import chisquare
 
 # =========================== PARAMETERS & VARIABLES ===========================
 # You may change these variables
-a = [2, 10, 10]                       # Amplitudes: [background, sun, moon]
+a = [5, 75, 75]                       # Amplitudes: [background, sun, moon]
 start = '2016-01-01'                  # Start date for data generation
 ends = ['2016-01-15',                 # End date for data generation
         '2016-01-23',
@@ -114,9 +114,10 @@ for end, cyc in zip(ends, cycle):
             chi, p = chisquare(obs, exp)
 
             # SCIPY CURVE_FIT --------------------------------------------------
-            guess = [a[2], 0]                          # Initial parameter guess
-            bounds = [[9, -pi/16], [11, pi/16]]
-            ap = amp_and_phase(recon_M2_llt_bin, guess, bounds, N[0], S[0])
+            guess = [a[2], 0, 0]                          # Initial parameter
+            # guess
+            b = [[73, -pi/16, -0.1], [77, pi/16, 0.1]]
+            ap = amp_and_phase(recon_M2_llt_bin, guess, N[0], S[0], bounds=b)
             error_amp = round((abs(ap[0] - a[2]) / a[2]) * 100, 2)
             diff_phase = round(ap[1] - 0, 6)
 
@@ -130,13 +131,14 @@ for end, cyc in zip(ends, cycle):
                 f.write('number of data points, v = {}\n'.format(v))
                 f.write('χ² ≤ v: {}\n'.format(chi <= v))
                 f.write('Amplitudes and phases\n')
-                f.write('Average reconstructed lunar amplitude across '
-                        'longitudes: {}\n'.format(round(ap[0], 2)))
+                f.write('Reconstructed lunar amplitude: '
+                        '{}\n'.format(round(ap[0], 2)))
                 f.write('M2 amplitude percent error: {}%\n'.format(error_amp))
-                f.write('Average reconstructed lunar phase across longitudes: {'
-                        '}\n'.format(round(ap[1], 2)))
-                f.write('M2 phase difference from original (0): {}\n'.format(
-                    diff_phase))
+                f.write('reconstructed lunar phase: '
+                        '{}\n'.format(round(ap[1], 2)))
+                f.write('M2 phase difference from original (0): '
+                        '{}\n'.format(diff_phase))
+                f.write('Vertical offset: {}\n'.format(ap[2]))
                 f.write('\n')
             f.close()
 

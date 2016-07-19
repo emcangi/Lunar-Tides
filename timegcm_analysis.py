@@ -8,143 +8,99 @@ LASP REU, CU Boulder
 """
 
 from lunar_tide_extraction import *
-from scipy.stats import chisquare
 
 fname = 'Analysis/TIME-GCM/TUVZ_allLev_timegcm_wg5_zmPlev05_GPI_lunarM2_tmp4.nc'
+lat = -45
+type = 'temp'
 
-timegcm_data = wrangle_timegcm_data(fname, 20, 'TN')
-
-
-### FIX EVERYTHING BELOW HERE !!!!! ----------------------#####################
-
-
-
+# Extract and format the data from the NetCDF file
+timegcm_data = format_timegcm_data(fname, lat, 'TN')
+print('Finished formatting data')
 
 # =========================== PARAMETERS & VARIABLES ===========================
 # You may change these variables
-a = [0, 10, 10]                       # Amplitudes: [background, sun, moon]
-start = '2016-01-01'                  # Start date for data generation
-ends = ['2016-01-15',                 # End date for data generation
-        '2016-01-23',
-        '2016-01-30']
-f1 = 'genM2_{}_dt={}_b{}_sc1.txt'     # File to write generated tidal data
-f2 = 'reconM2_{}_dt={}_b{}_sc1.txt'   # File to write reconstructed tidal data
-f3 = 'origM2_{}_dt={}_b{}_sc1.txt'    # File to write original M2 data after bin
-f4 = 'scenario1_results.txt'          # Prints results of χ² test, etc
-L = -120                              # Longitude to use for plotting results
+start = timegcm_data[0, 3]
+duration = [15, 23, 30]
+fr = 'reconM2_{}_lat={}_timegcm_{}.txt'       # File to write reconstructed data
+result_file = 'timegcm_results_{}.txt'        # Stores results
+L = 150                                  # Longitude to use for plotting results
 cycle = ['Half', '75%', 'Full']
 
 # Strongly suggested not to change these variables
-DTS = [0.5, 1]                # Time steps for data generation in hours
-BINS = [0.5, 1]               # Bin size to use when doing SLT and LLT binning
+binsz = 1                     # Bin size to use when doing SLT and LLT binning
 N = [2]                       # Values of v to use in format [n1, n2...]
 S = [2]                       # Values of s to use in format [s1, s2...]
-GEN_LUNAR = []                # Arrays of generated lunar tidal data (M2)
-RECON_LUNAR = []              # Reconstructed lunar tides after calculations
 
 
 # =================================== MAIN =====================================
 
 # Initialize results file
-f = open(f4, 'w')
-f.write('SCENARIO 1\n')
-f.write('Background tides: {}\n'.format(a[0]))
-f.write('Solar amplitude: {}\n'.format(a[1]))
-f.write('Solar phase: 0\n')
-f.write('Lunar amplitude: {}\n'.format(a[2]))
-f.write('Lunar phase: 0\n')
-f.write('\n')
+f = open(result_file.format(type), 'w')
+f.write('TIME-GCM Analysis, {}, lat = {}\n'.format(type, lat))
 f.close()
 
-for end, cyc in zip(ends, cycle):
-    for dt in DTS:
-        for binsz in BINS:
-            # GENERATE DATA ----------------------------------------------------
-            if binsz < dt:
-                continue
+for dur, cyc in zip(duration, cycle):
 
+    # Extract only entries that are within the cycle length specified by dur
+    data = timegcm_data[np.where(timegcm_data[:, 3] <= start + dur)]
 
-            # Bin generated data by solar local time
-            means_slt = bin_by_solar(dataT, binsz)
+    # Bin generated data by solar local time
+    means_slt = bin_by_solar(data, binsz)
 
-            # Subtract the means by SLT from original data
-            nosol = remove_solar(dataT, means_slt, binsz)
+    # Subtract the means by SLT from original data
+    nosol = remove_solar(data, means_slt, binsz)
 
-            # Bin the results by lunar local time
-            recon_M2_llt_bin = bin_by_lunar(nosol, binsz)
+    # Bin the results by lunar local time
+    recon_M2_llt_bin = bin_by_lunar(nosol, binsz)
 
-            # Bin original data by LLT -- to compare to reconstruction
-            orig_M2_llt_bin = bin_by_lunar(dataM, binsz)
+    # Write the results of lunar binning reconstructed M2 to a file
+    cells = '{:<20}\t'*3
+    line0 = cells.format('Lunar local time', 'Longitude',
+                         'Lunar Tide (m/s)')
+    np.savetxt(fr.format(cyc, lat, type), recon_M2_llt_bin, fmt='%-20.4f',
+               delimiter='\t', header=line0, comments='')
 
-            # Write the results of lunar binning reconstructed M2 to a file
-            cells = '{:<20}\t'*3
-            line0 = cells.format('Lunar local time', 'Longitude',
-                                  'Lunar Tide (Reconstructed)')
-            # np.savetxt(f2.format(cyc, dt, binsz), recon_M2_llt_bin,
-            # fmt='%-20.4f', delimiter='\t', header=line0, comments='')
+    # SCIPY CURVE_FIT --------------------------------------------------
+    guess_mean = np.mean(recon_M2_llt_bin[:, 2])
+    guess_amp = np.max(recon_M2_llt_bin[:, 2]) - guess_mean
+    guess_phase = 0
 
-            # Write the results of lunar binning original M2 to a file
-            # np.savetxt(f3.format(cyc, dt, binsz), orig_M2_llt_bin,
-            #            fmt='%-20.4f',
-            #            delimiter='\t', header=line0, comments='')
+    guess = [guess_amp, guess_phase, guess_mean]       # Initial parameter guess
+    ap = amp_and_phase(recon_M2_llt_bin, guess, N[0], S[0])
 
-            # χ² ANALYSIS ------------------------------------------------------
+    # WRITE RESULTS ----------------------------------------------------
 
-            # uses all data across all longitudes
-            obs = recon_M2_llt_bin[:, 2]
-            exp = orig_M2_llt_bin[:, 2]
-            v = len(obs)
-            chi, p = chisquare(obs, exp)
+    with open(result_file.format(type), 'a') as f:
+        f.write('{} lunar cycle\n'.format(cyc))
+        f.write('Bin size: {} hr\n'.format(binsz))
+        f.write('Reconstructed lunar amplitude: {}\n'.format(round(ap[0], 2)))
+        f.write('Reconstructed lunar phase: {}\n'.format(round(ap[1], 2)))
+        f.write('Reconstructed baseline: {}\n'.format(round(ap[2], 2)))
+        f.write('\n')
+    f.close()
 
-            # SCIPY CURVE_FIT --------------------------------------------------
-            guess = [a[2], 0]                  # Initial parameter guess
-            bounds = [[9, 0], [11, 3*pi/4]]  # [[lo A, lo φ], [hi A, hi φ]]
-            ap = amp_and_phase(recon_M2_llt_bin, guess, bounds, N[0], S[0])
-            error_amp = round((abs(ap[0] - a[2]) / a[2]) * 100, 2)
-            diff_phase = round(ap[1] - 0, 6)
+    # MAKE COMPARISON PLOT ---------------------------------------------
 
-            # WRITE RESULTS ----------------------------------------------------
+    recon_L = recon_M2_llt_bin[np.where(recon_M2_llt_bin[:, 1] == L)]
 
-            with open(f4, 'a') as f:
-                f.write('{} lunar cycle\n'.format(cyc))
-                f.write('Timestep: {} hr\n'.format(dt))
-                f.write('Bin size: {} hr\n'.format(binsz))
-                f.write('χ² = {}, p = {} (all longitudes)\n'.format(chi, p))
-                f.write('number of data points, v = {}\n'.format(v))
-                f.write('χ² ≤ v: {}\n'.format(chi <= v))
-                f.write('Amplitudes and phases\n')
-                f.write('Average reconstructed lunar amplitude across '
-                        'longitudes: {}\n'.format(round(ap[0], 2)))
-                f.write('M2 amplitude percent error: {}%\n'.format(error_amp))
-                f.write('Average reconstructed lunar phase across longitudes: {'
-                        '}\n'.format(round(ap[1], 2)))
-                f.write('M2 phase difference from original (0): {}\n'.format(
-                    diff_phase))
-                f.write('\n')
-            f.close()
+    # Generate data to plot the fit line
+    fit = ap[0] * np.cos((2 * pi * N[0] / 24) * recon_L[:, 0] +
+                             (S[0] - N[0]) * L - ap[1]) + ap[2]
 
-            # MAKE COMPARISON PLOT ---------------------------------------------
+    plt.figure(figsize=(10, 8))
 
-            orig_L = orig_M2_llt_bin[np.where(orig_M2_llt_bin[:, 1] == L)]
-            recon_L = recon_M2_llt_bin[np.where(recon_M2_llt_bin[:, 1] == L)]
+    plt.plot(recon_L[:, 0], recon_L[:, 2], color='blue',
+             marker='x', markersize=10, label='Reconstructed M2')
+    plt.plot(recon_L[:, 0], fit, color='red', label='Fit line')
 
-            # Generate data to plot the fit line
-            fit = ap[0] * np.cos((2*pi*N[0] / 24) * recon_L[:, 0] +
-                                       (S[0] - N[0]) * L - ap[1])
-
-            plt.figure(figsize=(10,8))
-            plt.plot(orig_L[:, 0], orig_L[:, 2], color='deepskyblue',
-                     marker='o', markersize=8, label='Original')
-            plt.plot(recon_L[:, 0], recon_L[:, 2], color='blue',
-                     marker='x', markersize=10, label='Reconstructed')
-            plt.plot(recon_L[:, 0], fit, color='red', label='Fit line')
-            title = 'M2 vs LLT, {}° longitude, {} cycle, dt={} hr, ' \
-                    'b={} hr'.format(L, cyc, dt, binsz)
-            plt.title(title)
-            plt.xlabel('Lunar local time (hours)')
-            plt.ylabel('Tidal amplitude')
-            plt.legend(loc='lower right')
-            plt.rcParams.update({'font.size': 16})
-            plt.tight_layout()
-            fn = title + '.png'
-            plt.savefig(fn, bbox_inches='tight')
+    title = 'M2 vs LLT, {}° latitude, {}° longitude, {} cycle'.format(lat, L,
+                                                                      cyc)
+    plt.title(title)
+    plt.xlabel('Lunar local time (hours)')
+    plt.ylabel('Tidal amplitude (m/s)')
+    plt.legend(loc='lower right')
+    plt.rcParams.update({'font.size': 16})
+    plt.tight_layout()
+    fn = title + '.png'
+    plt.savefig(fn, bbox_inches='tight')
+    #plt.show()
