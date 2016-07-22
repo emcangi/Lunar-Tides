@@ -46,9 +46,9 @@ for lat in range(-90, 90, 5):
 
     while window_end <= LAST_DATE:
         # Extract only entries that are within the current window
-        tide = (window_start <= timegcm_data[:, 3]) & (timegcm_data[:,
+        in_window = (window_start <= timegcm_data[:, 3]) & (timegcm_data[:,
                                                        3] <= window_end)
-        data = timegcm_data[np.where(tide)]
+        data = timegcm_data[np.where(in_window)]
 
         # Bin by SLT, subtract SLT average from original data, then bin by LLT
         means_slt = bin_by_solar(data, BINSZ)
@@ -62,8 +62,8 @@ for lat in range(-90, 90, 5):
         guess_phase = 0
         guess = [guess_amp, guess_phase, guess_mean]   # Initial parameter guess
 
-        bounds = [[0, -2*pi, -np.inf], [10000, 2*pi, np.inf]]
-        ap = amp_and_phase(recon_M2_llt_bin, guess, N[0], S[0], bounds=bounds)
+        bounds = [[0, -pi/2, -np.inf], [10000, pi/2, np.inf]]
+        ap = fit_m2(recon_M2_llt_bin, guess, N[0], S[0], bounds=bounds)
 
         # WRITE RESULTS --------------------------------------------------------
 

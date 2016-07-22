@@ -68,7 +68,7 @@ for dur, cyc in zip(duration, cycle):
     guess_phase = 0
 
     guess = [guess_amp, guess_phase, guess_mean]       # Initial parameter guess
-    ap = amp_and_phase(recon_M2_llt_bin, guess, N[0], S[0])
+    ap = fit_m2(recon_M2_llt_bin, guess, N[0], S[0])
 
     # WRITE RESULTS ------------------------------------------------------------
 

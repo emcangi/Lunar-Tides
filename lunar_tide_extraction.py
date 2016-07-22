@@ -5,43 +5,6 @@ import matplotlib.pyplot as plt
 from math import pi, cos
 
 
-def amp_and_phase(recondata, pguess, n, s, bounds=None):
-    """
-    Fits the lunar equation based on lunar local time for each longitudeto
-    the reconstructed data in order to extract its amplitude and phase for
-    comparison to the originals.
-
-    :param recondata: Reconstructed lunar tide data binned by LLT, format [[
-                      llt, longitude, tide]_0 ...]
-    :param pguess: Initial guess for parameters in format [amplitude, phase,
-                    background]
-    :param bounds: Bounds for amplitude in format [[low A, low φ], [high A,
-                                                                    high φ]]
-    :param s: Spatial frequency of the tidal wave.
-    :param n: Temporal frequency of the tidal wave. 2 for semidiurnal.
-    :return: list of lists stating the fitted amplitude and phase per
-             longitude
-    """
-    from scipy.optimize import curve_fit
-
-    # Function that gets fit - nested to allow additional arguments
-    def fit_lunar(n, s, L):
-        def real_fitter(llt, A, P, C):
-            return A * np.cos((2 * pi * n / 24) * llt + (s - n) * L - P) + C
-        return real_fitter
-
-    if bounds is None:
-        popt, pcov = curve_fit(fit_lunar(n, s, recondata[:, 1]), recondata[:, 0],
-                               recondata[:, 2], pguess)
-    else:
-        popt, pcov = curve_fit(fit_lunar(n, s, recondata[:, 1]),
-                               recondata[:, 0], recondata[:, 2], pguess,
-                               bounds=bounds)
-
-
-    return [popt[0], popt[1], popt[2]]
-
-
 def bin_by_solar(data, binsize):
     """
     Finds the mean of the solar contribution at a given solar local time.
@@ -116,16 +79,15 @@ def bin_by_solar(data, binsize):
 
 def bin_by_lunar(data, binsize):
     """
-    Finds the mean of the solar contribution at a given solar local time.
-    Writes a file of means for each line of a unique solar local time and
-    longitude.
+    Finds the lunar contribution at a given lunar local time via binning and
+    averaging.
     ---INPUT---
         data        Array of tidal data
         binsize     Bin size in hours
         filename    Name for output file
     ---OUTPUT---
-        output       3-column array, columns: solar local time, longitude,
-                    mean solar contribution.
+        output      3-column array, columns: lunar local time, longitude,
+                    lunar contribution.
     """
 
     # Build array of just the llt, long and data. Rounding is to avert
@@ -247,6 +209,41 @@ def date_to_jd(date, time):
     jd = int(365.25 * (y + 4716)) + int(30.6001 * (mo + 1)) + d + b - 1524.5 + f
 
     return jd
+
+
+def fit_m2(recondata, pguess, n, s, bounds=None):
+    """
+    Fits the lunar equation based on lunar local time for each longitudeto
+    the reconstructed data in order to extract its amplitude and phase for
+    comparison to the originals.
+
+    :param recondata: Reconstructed lunar tide data binned by LLT, format [[
+                      llt, longitude, tide]_0 ...]
+    :param pguess: Initial guess for parameters in format [amplitude, phase,
+                    background]
+    :param bounds: Bounds for amplitude in format [[low A, low φ], [high A,
+                                                                    high φ]]
+    :param s: Spatial frequency of the tidal wave.
+    :param n: Temporal frequency of the tidal wave. 2 for semidiurnal.
+    :return: list containing the fit values for amplitude, phase and offset
+    """
+    from scipy.optimize import curve_fit
+
+    # Function that gets fit - nested to allow additional arguments
+    def fit_lunar(n, s, L):
+        def real_fitter(llt, A, P, C):
+            return A * np.cos((2*pi*n / 24) * llt + (s - n)*L - P) + C
+        return real_fitter
+
+    if bounds is None:
+        popt, pcov = curve_fit(fit_lunar(n, s, recondata[:, 1]), recondata[:, 0],
+                               recondata[:, 2], pguess)
+    else:
+        popt, pcov = curve_fit(fit_lunar(n, s, recondata[:, 1]),
+                               recondata[:, 0], recondata[:, 2], pguess,
+                               bounds=bounds)
+
+    return [popt[0], popt[1], popt[2]]
 
 
 def format_timegcm_data(fname, lat, var):
@@ -608,7 +605,7 @@ def insert_llt_avgs(original, means, binsize):
     return new
 
 
-def jd_to_date(jd):
+def jd_to_date(jd, fmt='indv'):
     """
     Converts Julian date to Gregorian date.
     From Astronomical Algorithms, Jean Meeus, 1991.
@@ -639,7 +636,10 @@ def jd_to_date(jd):
     m = int((f * 24 - int(h)) * 60)
     s = int((((f * 24 - int(h)) * 60) - m) * 60)
 
-    return year, month, day, h, m, s
+    if fmt == 'indv':
+        return year, month, day, h, m, s
+    elif fmt == 'string':
+        return '{}-{:>02}-{:>02}'.format(year, month, day)
 
 
 def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
@@ -672,6 +672,18 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
     if stack:
         tides2 = [data2[i, 6] for i in rows]
 
+    # convert times to Gregorian
+    time_ticks = []
+    for t in times:
+        if round(t - int(t), 2) == 0.5:
+            y, mo, d, h, mi, s = jd_to_date(t)
+            time_ticks.append(d)
+        else:
+            time_ticks.append('')
+
+    months = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+              'August', 'September', 'October', 'November', 'December']
+
     # PLOT -------------------------------------------------------------------
     plt.figure(figsize=(25, 6))
     s = len(times)                           # set a limit for plotting
@@ -683,10 +695,12 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
     else:
         plt.plot(times, tides, marker=m)
 
-    #plt.title('{} by Julian date at {}° Longitude'.format(title, long))
-    #plt.xlim([min(times), max(times)])
-    plt.xlabel('Julian date')
-    plt.ylabel('Tide amplitude')  # what actually is the units of this?
+    plt.title('{} by Julian date at {}° Longitude'.format(title, long))
+    plt.xlim([min(times), max(times)])
+    plt.xlabel('Day in {}, {}'.format(months[mo-1], y))
+    plt.ylabel('Tide amplitude (zonal wind, m/s)')
+    plt.xticks(times, time_ticks)
+    plt.tick_params(axis='x', which='both', bottom='off', top='off')
     plt.rcParams.update({'font.size': 16})
 
     if mode == 'show':
@@ -694,11 +708,13 @@ def plot_vs_date(data, long, title=None, data2=None, c=None, m=None, lb=None,
         # plt.close()
     elif mode == 'save':
         fn = '{} by Julian date at {}° Longitude'.format(title, long)
-        plt.savefig(fn, bbox_inches='tight')
+        plt.savefig(fn, facecolor='w', edgecolor='w', format='png',
+                    transparent=False, bbox_inches='tight')
         plt.close()
     elif mode == 'both':
         fn = '{} by Julian date at {}° Longitude'.format(title, long)
-        plt.savefig(fn, bbox_inches='tight')
+        plt.savefig(fn, facecolor='w', edgecolor='w', format='png',
+                    transparent=False)#, bbox_inches='tight')
         plt.show()
         plt.clf()
         plt.close()
@@ -897,8 +913,8 @@ def plot_vs_llt(o, r, obg, lon, coeffs, s, n, cyc, dt, binsz):
 
 def remove_solar(original, means, binsize):
     """
-    Subtract off the solar tidal averages. Iterates through the file holding
-    solar tidal average data per solar local time and longitude.
+    Subtract off the solar tidal averages.
+
     --INPUT--
         original    Data array where columns are solar local time, lunar local
                     time, longitude, lunar Julian date, hour, moon phase and

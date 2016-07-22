@@ -117,8 +117,8 @@ for end, cyc in zip(ends, cycle):
             bounds = [[73, -pi/16, -0.1], [77, pi/16, 0.1]]  # [[lo A, lo φ],
             # [hi A,
             # hi φ]]
-            ap = amp_and_phase(recon_M2_llt_bin, guess, N[0], S[0],
-                               bounds=bounds)
+            ap = fit_m2(recon_M2_llt_bin, guess, N[0], S[0],
+                        bounds=bounds)
             error_amp = round((abs(ap[0] - a[2]) / a[2]) * 100, 2)
             diff_phase = round(ap[1] - 0, 6)
 
