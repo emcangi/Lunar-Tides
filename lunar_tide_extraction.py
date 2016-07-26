@@ -150,20 +150,6 @@ def bin_by_lunar(data, binsize):
     return output
 
 
-def chisq(obs, exp):
-    """
-    Perform χ² minimization test for the observed and expected lunar tidal
-    data.
-    """
-    tot = 0
-
-    for o, e in zip(obs, exp):
-        chisquared = (o-e)**2 / e
-        tot += chisquared
-
-    return tot
-
-
 def date_to_jd(date, time):
     """
     Converts Gregorian date to Julian date given two strings of date and time.
@@ -213,12 +199,12 @@ def date_to_jd(date, time):
 
 def fit_m2(recondata, pguess, n, s, bounds=None):
     """
-    Fits the lunar equation based on lunar local time for each longitudeto
+    Fits the lunar equation based on lunar local time for each longitude to
     the reconstructed data in order to extract its amplitude and phase for
     comparison to the originals.
 
     :param recondata: Reconstructed lunar tide data binned by LLT, format [[
-                      llt, longitude, tide]_0 ...]
+                      llt, longitude, tide]_0 ...[llt, longitude, tide]_n]
     :param pguess: Initial guess for parameters in format [amplitude, phase,
                     background]
     :param bounds: Bounds for amplitude in format [[low A, low φ], [high A,
@@ -291,9 +277,7 @@ def format_timegcm_data(fname, lat, var):
     n = datapoints * numLong                    # number of rows for final array
     output = np.zeros([n, 7])
 
-
     # POPULATE OUTPUT ARRAY ====================================================
-
     start = 0       # row index of output at which to paste the sub array.
     for i in range(0, datapoints):
         # for every time entry we have a day, an hour and some tidal values by
@@ -308,7 +292,9 @@ def format_timegcm_data(fname, lat, var):
         hrUT = times[i, 1]
 
         # Set up the date string to use JD converter
-        if 1 <= day <= 31:
+        if 350 <= day <= 366:
+            date = '2012-12-{:>02}'.format(31 - (366 - day))
+        elif 1 <= day <= 31:
             date = '2013-01-{:>02}'.format(day)
         else:
             date = '2013-02-{:>02}'.format(day - 31)
@@ -353,13 +339,13 @@ def format_timegcm_data(fname, lat, var):
         # moves up the pasting index to the next line of 0s in timegcm_array
         start += numLong
 
-    # cells = '{:<20}\t'*7
-    # line0 = cells.format('Solar local time', 'Lunar local time',
-    #                      'Longitude', 'Julian Date', 'UT',
-    #                      'Moon phase (hrs)', 'Tide')
-    #
-    # np.savetxt('timegcm_data.txt', output, fmt='%-20.4f',
-    #            delimiter='\t', header=line0, comments='')
+    cells = '{:<20}\t'*7
+    line0 = cells.format('Solar local time', 'Lunar local time',
+                         'Longitude', 'Julian Date', 'UT',
+                         'Moon phase (hrs)', 'Tide')
+
+    np.savetxt('timegcm_data.txt', output, fmt='%-20.4f',
+               delimiter='\t', header=line0, comments='')
 
     return output, nearest_lat
 
@@ -421,6 +407,9 @@ def generate_tides(start_date, end_date, amps, ampflag=None, phase=None, dt=1,
     n_hours = 24 * n_days
     timesteps = np.arange(0, n_hours, dt)
     dt_conv = 0.0416667 / 1           # 0.0416667 JD / 1 hour
+                                      # may produce slight error over
+                                      # leapyears, equivalent to 3/10 of a
+                                      # second.
 
     # MAKE OUTPUT ARRAY --------------------------------------------------------
     rows = numLongs * (n_hours / dt)
